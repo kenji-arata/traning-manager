@@ -12,6 +12,13 @@
     "format:check": "prettier . --check"
   },
   "dependencies": {
+    "@emotion/cache": "^11.14.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^7.3.4",
+    "@mui/material-nextjs": "^7.3.3",
+    "@mui/x-date-pickers": "^8.14.0",
+    "dayjs": "^1.11.18",
     "next": "15.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0"
