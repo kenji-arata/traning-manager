@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import dayjs, { Dayjs } from "dayjs";
+import { Dayjs } from "dayjs";
 import "dayjs/locale/ja";
 import { Stack, Typography, List, ListItem, ListItemText } from "@mui/material";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
