@@ -3,45 +3,53 @@
 import * as React from "react";
 import { Dayjs } from "dayjs";
 import "dayjs/locale/ja";
-import { Stack, Typography, List, ListItem, ListItemText } from "@mui/material";
+import { Stack, Typography } from "@mui/material";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { Suspense } from "react";
 import { BaseUrl } from "../../../lib/utils";
 
-let trainingMenusPromise: Promise<string[]> | null = null;
-
-const fetchTrainingMenus = (): Promise<string[]> => {
-  if (!trainingMenusPromise) {
-    trainingMenusPromise = fetch(`${BaseUrl()}/api/traning_menu`).then((response) =>
-      response.json(),
-    );
-  }
-  return trainingMenusPromise;
-};
-
-const TrainingMenus = () => {
-  const trainingMenus = React.use(fetchTrainingMenus());
-
-  return (
-    <List>
-      {trainingMenus.map((menu, index) => (
-        <ListItem key={index}>
-          <ListItemText primary={menu} />
-        </ListItem>
-      ))}
-    </List>
-  );
-};
-
-const Calendar = ({ params }: { params: Promise<{ day?: string[] }> }) => {
+const Calendar = ({}: { params: Promise<{ day?: string[] }> }) => {
   const [value, setValue] = React.useState<Dayjs | null>(null);
-  console.log(params);
 
-  const onChange = (newValue: Dayjs | null) => {
+  const onChange = async (newValue: Dayjs | null) => {
     setValue(newValue);
     console.log(newValue);
+
+    // test
+    try {
+      const response = await fetch(`${BaseUrl()}/api/score`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mode: "NORMAL",
+          score: 100,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("スコアを保存しました:", data);
+      } else {
+        console.error("スコアの保存に失敗しました:", response.status);
+      }
+
+      // GETリクエストでスコア一覧を取得
+      const getResponse = await fetch(`${BaseUrl()}/api/score`, {
+        method: "GET",
+      });
+
+      if (getResponse.ok) {
+        const scores = await getResponse.json();
+        console.log("現在のスコア一覧:", scores);
+      } else {
+        console.error("スコアの取得に失敗しました:", getResponse.status);
+      }
+    } catch (error) {
+      console.error("スコアの保存中にエラーが発生しました:", error);
+    }
   };
 
   return (
@@ -58,9 +66,6 @@ const Calendar = ({ params }: { params: Promise<{ day?: string[] }> }) => {
           </Typography>
         </Stack>
       </LocalizationProvider>
-      <Suspense fallback={<>読み込み中...</>}>
-        <TrainingMenus />
-      </Suspense>
     </>
   );
 };

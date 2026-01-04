@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
-    "format:check": "prettier . --check"
+    "format:check": "prettier . --check",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
@@ -19,13 +20,16 @@
     "@mui/material-nextjs": "^7.3.3",
     "@mui/x-date-pickers": "^8.14.0",
     "@neondatabase/serverless": "^1.0.2",
+    "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
     "dayjs": "^1.11.18",
     "next": "16.1.1",
+    "pg": "^8.16.3",
     "prisma": "^7.2.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "vercel": "^48.2.9"
+    "vercel": "^48.2.9",
+    "zod": "^4.3.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
