@@ -19,8 +19,10 @@
     "@mui/material-nextjs": "^7.3.3",
     "@mui/x-date-pickers": "^8.14.0",
     "@neondatabase/serverless": "^1.0.2",
+    "@prisma/client": "^7.2.0",
     "dayjs": "^1.11.18",
     "next": "16.1.1",
+    "prisma": "^7.2.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "vercel": "^48.2.9"

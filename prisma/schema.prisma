@@ -1,0 +1,14 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Score {
+  id        Int      @id @default(autoincrement())
+  score     Int
+  mode      String
+  createdAt DateTime @default(now())
+}
