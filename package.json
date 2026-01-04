@@ -20,7 +20,7 @@
     "@mui/x-date-pickers": "^8.14.0",
     "@neondatabase/serverless": "^1.0.2",
     "dayjs": "^1.11.18",
-    "next": "15.5.4",
+    "next": "15.5.9",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "vercel": "^48.2.9"
