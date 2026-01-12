@@ -4,3 +4,28 @@ export const ScoreSchema = z.object({
   mode: z.enum(["NORMAL", "ONE_SHOT"]),
   score: z.number().min(0),
 });
+
+export const BODY_PARTS = {
+  ARM: "ARM",
+  SHOULDER: "SHOULDER",
+  CHEST: "CHEST",
+  LEG: "LEG",
+  BACK: "BACK",
+  ABS: "ABS",
+} as const;
+
+export type BodyPart = (typeof BODY_PARTS)[keyof typeof BODY_PARTS];
+
+export const TrainingItemSchema = z.object({
+  name: z.string().min(1, "名前を入力してください"),
+  bodyPart: z.enum([
+    BODY_PARTS.ARM,
+    BODY_PARTS.SHOULDER,
+    BODY_PARTS.CHEST,
+    BODY_PARTS.LEG,
+    BODY_PARTS.BACK,
+    BODY_PARTS.ABS,
+  ]),
+});
+
+export type TrainingItemInput = z.infer<typeof TrainingItemSchema>;

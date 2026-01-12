@@ -11,4 +11,25 @@ model Score {
   score     Int
   mode      String
   createdAt DateTime @default(now())
+
+  @@map("score")
+}
+
+enum BodyPart {
+  ARM       
+  SHOULDER  
+  CHEST     
+  LEG       
+  BACK      
+  ABS       
+}
+
+model TrainingItem {
+  id        Int      @id @default(autoincrement())
+  name      String
+  bodyPart  BodyPart
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("training_items")
 }
