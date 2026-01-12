@@ -17,6 +17,7 @@ export const BODY_PARTS = {
 export type BodyPart = (typeof BODY_PARTS)[keyof typeof BODY_PARTS];
 
 export const TrainingItemSchema = z.object({
+  id: z.number().optional(),
   name: z.string().min(1, "名前を入力してください"),
   bodyPart: z.enum([
     BODY_PARTS.ARM,
