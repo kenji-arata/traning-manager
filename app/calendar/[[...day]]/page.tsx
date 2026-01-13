@@ -7,7 +7,7 @@ import { Stack, Typography } from "@mui/material";
 import { DateCalendar } from "@mui/x-date-pickers/DateCalendar";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { BaseUrl } from "../../../lib/utils";
+import { BaseUrl } from "@/utils/apiClient";
 
 const Calendar = ({}: { params: Promise<{ day?: string[] }> }) => {
   const [value, setValue] = React.useState<Dayjs | null>(null);

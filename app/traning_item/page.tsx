@@ -1,13 +1,24 @@
-import { BODY_PARTS } from "@/schema/schema";
-import CreateTrainingItemModal from "./CreateTrainingItemModal";
+"use client";
 
-type TrainingItem = {
-  id: number;
-  name: string;
-  bodyPart: keyof typeof BODY_PARTS;
-  createdAt: string;
-  updatedAt: string;
-};
+import { useState } from "react";
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
+import {
+  GridView as GridViewIcon,
+  FitnessCenter as FitnessCenterIcon,
+  SelfImprovement as SelfImprovementIcon,
+  FavoriteBorder as FavoriteBorderIcon,
+  DirectionsRun as DirectionsRunIcon,
+  Accessibility as AccessibilityIcon,
+  Whatshot as WhatshotIcon,
+  LabelOutlined as LabelOutlinedIcon,
+  AccessTime as AccessTimeIcon,
+  Delete as DeleteIcon,
+} from "@mui/icons-material";
+import { BODY_PARTS } from "../schema/schema";
+import { useTrainingItems, type TrainingItem } from "../../hooks/useTrainingItems";
+import CreateButton from "./CreateButton";
+import TrainingItemModal from "./TrainingItemModal";
+import DeleteConfirmModal from "./DeleteConfirmModal";
 
 // 部位の日本語変換
 const bodyPartLabels: Record<keyof typeof BODY_PARTS, string> = {
@@ -19,90 +30,225 @@ const bodyPartLabels: Record<keyof typeof BODY_PARTS, string> = {
   ABS: "腹筋",
 };
 
-export default async function TrainingItemPage() {
-  let trainingItems: TrainingItem[] = [];
-  let error: string | null = null;
+// 部位ごとの色
+const bodyPartColors: Record<keyof typeof BODY_PARTS, string> = {
+  ARM: "bg-purple-100 text-purple-800 border-purple-200",
+  SHOULDER: "bg-orange-100 text-orange-800 border-orange-200",
+  CHEST: "bg-blue-100 text-blue-800 border-blue-200",
+  LEG: "bg-green-100 text-green-800 border-green-200",
+  BACK: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  ABS: "bg-pink-100 text-pink-800 border-pink-200",
+};
 
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const response = await fetch(`${baseUrl}/api/training_item`, {
-      cache: "no-store",
-    });
+// タブの定義
+const tabs = [
+  { key: "ALL", label: "全て", Icon: GridViewIcon },
+  { key: "ARM", label: "腕", Icon: FitnessCenterIcon },
+  { key: "SHOULDER", label: "肩", Icon: SelfImprovementIcon },
+  { key: "CHEST", label: "胸", Icon: FavoriteBorderIcon },
+  { key: "LEG", label: "脚", Icon: DirectionsRunIcon },
+  { key: "BACK", label: "背中", Icon: AccessibilityIcon },
+  { key: "ABS", label: "腹筋", Icon: WhatshotIcon },
+] as const;
 
-    if (!response.ok) {
-      throw new Error(`APIエラー: ${response.status}`);
+export default function TrainingItemPage() {
+  const { items, loading, error, createItem, updateItem, deleteItem } = useTrainingItems();
+  const [selectedTabIndex, setSelectedTabIndex] = useState(0);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<TrainingItem | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<TrainingItem | null>(null);
+
+  const filterByBodyPart = (bodyPart: string): TrainingItem[] => {
+    if (bodyPart === "ALL") {
+      return items;
     }
+    return items.filter((item) => item.bodyPart === bodyPart);
+  };
 
-    trainingItems = await response.json();
-  } catch (e) {
-    error = e instanceof Error ? e.message : "データの取得に失敗しました";
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-slate-600 font-medium">読み込み中...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">トレーニング種別一覧</h1>
-        <CreateTrainingItemModal />
-      </div>
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          エラー: {error}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* ヘッダー */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between gap-4 mb-2 flex-nowrap">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 whitespace-nowrap">
+              トレーニング種別
+            </h1>
+            <CreateButton createItem={createItem} />
+          </div>
         </div>
-      )}
-
-      {!error && trainingItems.length === 0 && (
-        <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
-          トレーニング種別が登録されていません。
-        </div>
-      )}
-
-      {!error && trainingItems.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-300 shadow-md rounded">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">
-                  ID
-                </th>
-                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">
-                  名前
-                </th>
-                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">
-                  部位
-                </th>
-                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">
-                  作成日時
-                </th>
-                <th className="px-6 py-3 border-b text-left text-sm font-semibold text-gray-700">
-                  更新日時
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {trainingItems.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 border-b text-sm text-gray-900">{item.id}</td>
-                  <td className="px-6 py-4 border-b text-sm text-gray-900">{item.name}</td>
-                  <td className="px-6 py-4 border-b text-sm text-gray-900">
-                    <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                      {bodyPartLabels[item.bodyPart]}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-red-800 font-medium">エラー: {error}</p>
+          </div>
+        )}
+        {!error && items.length === 0 && (
+          <div className="text-center py-16">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+              <span className="text-3xl">🏃</span>
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900 mb-2">
+              トレーニング種別が登録されていません
+            </h3>
+            <p className="text-slate-600 mb-6">最初のトレーニング種別を登録しましょう</p>
+          </div>
+        )}
+        {!error && items.length > 0 && (
+          <TabGroup selectedIndex={selectedTabIndex} onChange={setSelectedTabIndex}>
+            <TabList className="flex gap-2 overflow-x-auto pb-2 mb-6">
+              {tabs.map((tab) => {
+                const IconComponent = tab.Icon;
+                return (
+                  <Tab
+                    key={tab.key}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg
+                      whitespace-nowrap transition-all duration-200
+                      text-slate-700 bg-white border border-slate-200
+                      data-selected:bg-blue-600 data-selected:text-white data-selected:border-blue-600 data-selected:shadow-lg data-selected:shadow-blue-600/25
+                      data-hover:bg-slate-50 data-hover:border-slate-300
+                      data-selected:data-hover:bg-blue-700
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  >
+                    <IconComponent sx={{ fontSize: 20 }} />
+                    <span>{tab.label}</span>
+                    <span className="data-selected:bg-blue-500 data-selected:text-white bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs font-semibold">
+                      {tab.key === "ALL" ? items.length : filterByBodyPart(tab.key).length}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 border-b text-sm text-gray-600">
-                    {new Date(item.createdAt).toLocaleString("ja-JP")}
-                  </td>
-                  <td className="px-6 py-4 border-b text-sm text-gray-600">
-                    {new Date(item.updatedAt).toLocaleString("ja-JP")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="mt-4 text-sm text-gray-600">全 {trainingItems.length} 件</div>
+                  </Tab>
+                );
+              })}
+            </TabList>
+            <TabPanels>
+              {tabs.map((tab) => {
+                const filteredItems = filterByBodyPart(tab.key);
+                const IconComponent = tab.Icon;
+                return (
+                  <TabPanel key={tab.key} className="focus:outline-none">
+                    {filteredItems.length === 0 ? (
+                      <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+                        <IconComponent sx={{ fontSize: 64, color: "#94a3b8", mb: 2 }} />
+                        <h3 className="text-lg font-medium text-slate-900 mb-2">
+                          {tab.label}のトレーニングはまだありません
+                        </h3>
+                        <p className="text-slate-600">新しいトレーニング種別を追加しましょう</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredItems.map((item, index) => (
+                          <div
+                            key={item.id}
+                            className="group bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200"
+                            style={{ animationDelay: `${index * 50}ms` }}
+                          >
+                            <div className="p-5">
+                              <div className="flex items-start justify-between gap-4">
+                                <div
+                                  className="flex-1 min-w-0 cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedItem(item);
+                                    setIsEditModalOpen(true);
+                                  }}
+                                >
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="text-lg font-semibold text-slate-900 truncate">
+                                      {item.name}
+                                    </h3>
+                                    <span
+                                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${bodyPartColors[item.bodyPart]}`}
+                                    >
+                                      {bodyPartLabels[item.bodyPart]}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                                    <span className="flex items-center gap-1">
+                                      <LabelOutlinedIcon sx={{ fontSize: 16 }} />
+                                      ID: {item.id}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <AccessTimeIcon sx={{ fontSize: 16 }} />
+                                      {new Date(item.updatedAt).toLocaleDateString("ja-JP", {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                      })}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setItemToDelete(item);
+                                      setIsDeleteModalOpen(true);
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    aria-label="削除"
+                                  >
+                                    <DeleteIcon sx={{ fontSize: 20 }} />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <div className="text-center pt-4 pb-2">
+                          <p className="text-sm text-slate-500">
+                            全{" "}
+                            <span className="font-semibold text-slate-700">
+                              {filteredItems.length}
+                            </span>{" "}
+                            件
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </TabPanel>
+                );
+              })}
+            </TabPanels>
+          </TabGroup>
+        )}
+      </div>
+      <TrainingItemModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedItem(null);
+        }}
+        editItem={selectedItem}
+        onSubmit={(input) => {
+          if ("id" in input) {
+            return updateItem(input);
+          }
+          return Promise.resolve();
+        }}
+      />
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setItemToDelete(null);
+        }}
+        itemId={itemToDelete?.id ?? 0}
+        itemName={itemToDelete?.name ?? ""}
+        onDelete={deleteItem}
+      />
     </div>
   );
 }

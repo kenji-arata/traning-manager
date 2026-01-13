@@ -1,5 +1,5 @@
 import prisma from "../../../lib/prisma";
-import { TrainingItemSchema } from "@/schema/schema";
+import { TrainingItemSchema } from "../../schema/schema";
 
 export async function GET() {
   try {
@@ -110,6 +110,65 @@ export async function PUT(request: Request) {
     });
   } catch (error) {
     console.error("[PUT /api/training_item] Error:", error);
+    return new Response(JSON.stringify({ error: "Internal Server Error." }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const idParam = searchParams.get("id");
+
+    // IDが指定されているか確認
+    if (!idParam) {
+      return new Response(JSON.stringify({ error: "ID parameter is required." }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const id = parseInt(idParam, 10);
+
+    // IDが有効な数値か確認
+    if (isNaN(id)) {
+      return new Response(JSON.stringify({ error: "Invalid ID format." }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 対象のトレーニング種別が存在するか確認
+    const existingItem = await prisma.trainingItem.findUnique({
+      where: { id },
+    });
+
+    if (!existingItem) {
+      return new Response(JSON.stringify({ error: "Training item not found." }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // トレーニング種別を削除
+    await prisma.trainingItem.delete({
+      where: { id },
+    });
+
+    return new Response(
+      JSON.stringify({
+        message: "Training item deleted successfully.",
+        deletedItem: existingItem,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  } catch (error) {
+    console.error("[DELETE /api/training_item] Error:", error);
     return new Response(JSON.stringify({ error: "Internal Server Error." }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

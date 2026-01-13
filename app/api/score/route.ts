@@ -1,5 +1,5 @@
 import prisma from "../../../lib/prisma";
-import { ScoreSchema } from "@/schema/schema";
+import { ScoreSchema } from "../../schema/schema";
 
 export async function GET() {
   try {
