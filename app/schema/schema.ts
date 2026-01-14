@@ -30,3 +30,13 @@ export const TrainingItemSchema = z.object({
 });
 
 export type TrainingItemInput = z.infer<typeof TrainingItemSchema>;
+
+export const TrainingRecordSchema = z.object({
+  id: z.number().optional(),
+  date: z.date(),
+  trainingItemId: z.number(),
+  weight: z.number(),
+  repetitions: z.number().int().min(1, "回数は1以上で入力してください"),
+});
+
+export type TrainingRecordInput = z.infer<typeof TrainingRecordSchema>;
