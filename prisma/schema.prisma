@@ -6,15 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-model Score {
-  id        Int      @id @default(autoincrement())
-  score     Int
-  mode      String
-  createdAt DateTime @default(now())
-
-  @@map("score")
-}
-
 enum BodyPart {
   ARM       
   SHOULDER  
