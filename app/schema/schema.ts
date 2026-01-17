@@ -35,3 +35,35 @@ export const TrainingRecordSchema = z.object({
 });
 
 export type TrainingRecordInput = z.infer<typeof TrainingRecordSchema>;
+
+export const TrainingTemplateSchema = z.object({
+  id: z.number().optional(),
+  name: z.string().min(1, "テンプレート名を入力してください"),
+});
+
+export type TrainingTemplateInput = z.infer<typeof TrainingTemplateSchema>;
+
+export const TrainingRecordTemplateSchema = z.object({
+  id: z.number().optional(),
+  trainingTemplateId: z.number(),
+  trainingItemId: z.number(),
+  weight: z.number().nullable().optional(),
+  repetitions: z.number().int().nullable().optional(),
+});
+
+export type TrainingRecordTemplateInput = z.infer<typeof TrainingRecordTemplateSchema>;
+
+export const TrainingTemplateWithRecordsSchema = z.object({
+  id: z.number().optional(),
+  name: z.string().min(1, "テンプレート名を入力してください"),
+  trainingRecordTemplates: z.array(
+    z.object({
+      id: z.number().optional(),
+      trainingItemId: z.number(),
+      weight: z.number().nullable().optional(),
+      repetitions: z.number().int().nullable().optional(),
+    }),
+  ),
+});
+
+export type TrainingTemplateWithRecordsInput = z.infer<typeof TrainingTemplateWithRecordsSchema>;

@@ -65,4 +65,15 @@ export class ApiClient {
     });
     return this.handleResponse<T>(response);
   }
+  static async patch<T>(path: string, body: unknown): Promise<T> {
+    const url = `${this.getBaseUrl()}${path}`;
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    return this.handleResponse<T>(response);
+  }
 }

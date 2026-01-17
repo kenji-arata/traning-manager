@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Input } from "@headlessui/react";
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -12,11 +13,16 @@ import {
   Edit as EditIcon,
   Save as SaveIcon,
   Close as CloseIcon,
+  CheckCircle as CheckCircleIcon,
+  ListAlt as ListAltIcon,
 } from "@mui/icons-material";
 import { useTrainingItems } from "../../../hooks/useTrainingItems";
 import { useTrainingRecords } from "../../../hooks/useTrainingRecords";
+import { useTrainingTemplates } from "../../../hooks/useTrainingTemplates";
 
-type RecordFormData = {
+type LocalRecord = {
+  id: string;
+  trainingItemId: number;
   weight: number;
   repetitions: number;
 };
@@ -25,12 +31,7 @@ type GroupedRecords = {
   trainingItemId: number;
   trainingItemName: string;
   bodyPart: string;
-  records: Array<{
-    id: number;
-    weight: number;
-    repetitions: number;
-    createdAt: string;
-  }>;
+  records: LocalRecord[];
 };
 
 export default function TrainingRecordPage() {
@@ -40,46 +41,37 @@ export default function TrainingRecordPage() {
 
   const { items: trainingItems, loading: itemsLoading } = useTrainingItems();
   const {
-    records,
+    records: savedRecords,
     loading: recordsLoading,
-    error,
-    createRecord,
-    updateRecord,
-    deleteRecord,
+    replaceRecords,
   } = useTrainingRecords(date);
+  const { templates, loading: templatesLoading } = useTrainingTemplates();
 
-  // 各種目のトグル開閉状態を管理
+  const [localRecords, setLocalRecords] = useState<LocalRecord[]>([]);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
-  // 各種目のフォーム表示状態を管理
   const [visibleForms, setVisibleForms] = useState<Set<number>>(new Set());
-  // 各種目のフォームデータを管理
-  const [formDataMap, setFormDataMap] = useState<Map<number, RecordFormData>>(new Map());
-  // 新規トレーニング登録フォームの表示状態
   const [showNewTrainingForm, setShowNewTrainingForm] = useState(false);
-  // 新規トレーニング登録フォームのデータ
   const [newTrainingFormData, setNewTrainingFormData] = useState({
     trainingItemId: trainingItems.length > 0 ? trainingItems[0].id : null,
-    weight: 0,
-    repetitions: 0,
+    weight: "" as number | "",
+    repetitions: "" as number | "",
   });
-  // 編集中のレコードID
-  const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
-  // 編集中のレコードデータ
-  const [editingData, setEditingData] = useState<RecordFormData>({
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [editingData, setEditingData] = useState({
     weight: 0,
     repetitions: 0,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
-  // 日付の妥当性チェック
   useEffect(() => {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setFormError("無効な日付形式です (yyyy-mm-dd)");
     }
   }, [date]);
 
-  // トレーニング種目が読み込まれたら、新規フォームの初期値を設定
   useEffect(() => {
     if (trainingItems.length > 0 && newTrainingFormData.trainingItemId === null) {
       setNewTrainingFormData((prev) => ({
@@ -89,25 +81,29 @@ export default function TrainingRecordPage() {
     }
   }, [trainingItems, newTrainingFormData.trainingItemId]);
 
-  // 記録をトレーニング種目ごとにグループ化
+  useEffect(() => {
+    const converted = savedRecords.map((record) => ({
+      id: `saved-${record.id}`,
+      trainingItemId: record.trainingItemId,
+      weight: record.weight,
+      repetitions: record.repetitions,
+    }));
+    setLocalRecords(converted);
+    setHasUnsavedChanges(false);
+  }, [savedRecords]);
+
   const groupedRecords: GroupedRecords[] = trainingItems
     .map((item) => {
-      const itemRecords = records.filter((record) => record.trainingItemId === item.id);
+      const itemRecords = localRecords.filter((record) => record.trainingItemId === item.id);
       return {
         trainingItemId: item.id,
         trainingItemName: item.name,
         bodyPart: item.bodyPart,
-        records: itemRecords.map((record) => ({
-          id: record.id,
-          weight: record.weight,
-          repetitions: record.repetitions,
-          createdAt: record.createdAt,
-        })),
+        records: itemRecords,
       };
     })
     .filter((group) => group.records.length > 0);
 
-  // トグルの開閉を切り替え
   const toggleExpand = (trainingItemId: number) => {
     setExpandedItems((prev) => {
       const newSet = new Set(prev);
@@ -120,7 +116,6 @@ export default function TrainingRecordPage() {
     });
   };
 
-  // フォーム表示を切り替え
   const toggleForm = (trainingItemId: number) => {
     setVisibleForms((prev) => {
       const newSet = new Set(prev);
@@ -128,142 +123,64 @@ export default function TrainingRecordPage() {
         newSet.delete(trainingItemId);
       } else {
         newSet.add(trainingItemId);
-        // フォームを表示する際、初期値を設定
-        if (!formDataMap.has(trainingItemId)) {
-          setFormDataMap((prevMap) => {
-            const newMap = new Map(prevMap);
-            newMap.set(trainingItemId, { weight: 0, repetitions: 0 });
-            return newMap;
-          });
-        }
       }
       return newSet;
     });
   };
 
-  // フォームデータを更新
-  const updateFormData = (trainingItemId: number, field: keyof RecordFormData, value: number) => {
-    setFormDataMap((prevMap) => {
-      const newMap = new Map(prevMap);
-      const currentData = newMap.get(trainingItemId) || { weight: 0, repetitions: 0 };
-      newMap.set(trainingItemId, { ...currentData, [field]: value });
-      return newMap;
-    });
+  const handleAddRecord = (trainingItemId: number, weight: number, repetitions: number) => {
+    const newRecord: LocalRecord = {
+      id: `temp-${Date.now()}-${Math.random()}`,
+      trainingItemId,
+      weight,
+      repetitions,
+    };
+    setLocalRecords((prev) => [...prev, newRecord]);
+    setHasUnsavedChanges(true);
+    toggleForm(trainingItemId);
   };
 
-  const handleSubmit = async (e: React.FormEvent, trainingItemId: number) => {
+  const handleNewTrainingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-
-    const formData = formDataMap.get(trainingItemId);
-    if (!formData) {
-      setFormError("フォームデータが見つかりません");
-      return;
-    }
-
-    if (formData.weight <= 0) {
-      setFormError("重量は0より大きい値を入力してください");
-      return;
-    }
-
-    if (formData.repetitions <= 0) {
-      setFormError("回数は1以上の値を入力してください");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      await createRecord({
-        date,
-        trainingItemId,
-        weight: formData.weight,
-        repetitions: formData.repetitions,
-      });
-
-      // フォームをリセット
-      setFormDataMap((prevMap) => {
-        const newMap = new Map(prevMap);
-        newMap.set(trainingItemId, { weight: 0, repetitions: 0 });
-        return newMap;
-      });
-      setVisibleForms((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(trainingItemId);
-        return newSet;
-      });
-    } catch (e) {
-      setFormError(e instanceof Error ? e.message : "登録に失敗しました");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleNewTrainingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-
     if (newTrainingFormData.trainingItemId === null) {
       setFormError("トレーニング種目を選択してください");
       return;
     }
-
-    if (newTrainingFormData.weight <= 0) {
+    if (newTrainingFormData.weight === "" || newTrainingFormData.weight <= 0) {
       setFormError("重量は0より大きい値を入力してください");
       return;
     }
-
-    if (newTrainingFormData.repetitions <= 0) {
+    if (newTrainingFormData.repetitions === "" || newTrainingFormData.repetitions <= 0) {
       setFormError("回数は1以上の値を入力してください");
       return;
     }
-
-    setIsSubmitting(true);
-
-    try {
-      await createRecord({
-        date,
-        trainingItemId: newTrainingFormData.trainingItemId,
-        weight: newTrainingFormData.weight,
-        repetitions: newTrainingFormData.repetitions,
+    handleAddRecord(
+      newTrainingFormData.trainingItemId,
+      Number(newTrainingFormData.weight),
+      Number(newTrainingFormData.repetitions),
+    );
+    setNewTrainingFormData({
+      trainingItemId: trainingItems.length > 0 ? trainingItems[0].id : null,
+      weight: "",
+      repetitions: "",
+    });
+    setShowNewTrainingForm(false);
+    if (newTrainingFormData.trainingItemId) {
+      setExpandedItems((prev) => {
+        const newSet = new Set(prev);
+        newSet.add(newTrainingFormData.trainingItemId!);
+        return newSet;
       });
-
-      // フォームをリセット
-      setNewTrainingFormData({
-        trainingItemId: trainingItems.length > 0 ? trainingItems[0].id : null,
-        weight: 0,
-        repetitions: 0,
-      });
-      setShowNewTrainingForm(false);
-
-      // 登録した種目を自動的に開く
-      if (newTrainingFormData.trainingItemId) {
-        setExpandedItems((prev) => {
-          const newSet = new Set(prev);
-          newSet.add(newTrainingFormData.trainingItemId!);
-          return newSet;
-        });
-      }
-    } catch (e) {
-      setFormError(e instanceof Error ? e.message : "登録に失敗しました");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("この記録を削除しますか?")) {
-      return;
-    }
-
-    try {
-      await deleteRecord(id, date);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "削除に失敗しました");
-    }
+  const handleDeleteRecord = (id: string) => {
+    setLocalRecords((prev) => prev.filter((record) => record.id !== id));
+    setHasUnsavedChanges(true);
   };
 
-  const handleEditStart = (record: { id: number; weight: number; repetitions: number }) => {
+  const handleEditStart = (record: LocalRecord) => {
     setEditingRecordId(record.id);
     setEditingData({
       weight: record.weight,
@@ -278,37 +195,60 @@ export default function TrainingRecordPage() {
     setFormError(null);
   };
 
-  const handleEditSave = async (recordId: number, trainingItemId: number) => {
+  const handleEditSave = (recordId: string) => {
     setFormError(null);
-
     if (editingData.weight <= 0) {
       setFormError("重量は0より大きい値を入力してください");
       return;
     }
-
     if (editingData.repetitions <= 0) {
       setFormError("回数は1以上の値を入力してください");
       return;
     }
+    setLocalRecords((prev) =>
+      prev.map((record) =>
+        record.id === recordId
+          ? { ...record, weight: editingData.weight, repetitions: editingData.repetitions }
+          : record,
+      ),
+    );
+    setHasUnsavedChanges(true);
+    setEditingRecordId(null);
+    setEditingData({ weight: 0, repetitions: 0 });
+  };
 
+  const handleSaveAll = async () => {
     setIsSubmitting(true);
-
+    setFormError(null);
     try {
-      await updateRecord({
-        id: recordId,
-        date,
-        trainingItemId,
-        weight: editingData.weight,
-        repetitions: editingData.repetitions,
-      });
-
-      setEditingRecordId(null);
-      setEditingData({ weight: 0, repetitions: 0 });
+      const recordsToSave = localRecords.map((record) => ({
+        trainingItemId: record.trainingItemId,
+        weight: record.weight,
+        repetitions: record.repetitions,
+      }));
+      await replaceRecords(date, recordsToSave);
+      setHasUnsavedChanges(false);
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : "更新に失敗しました");
+      setFormError(e instanceof Error ? e.message : "保存に失敗しました");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleApplyTemplate = (templateId: number) => {
+    const template = templates.find((t) => t.id === templateId);
+    if (!template) return;
+    const newRecords: LocalRecord[] = template.trainingRecordTemplates.map((rt, index) => ({
+      id: `template-${Date.now()}-${index}`,
+      trainingItemId: rt.trainingItemId,
+      weight: rt.weight ?? 0,
+      repetitions: rt.repetitions ?? 0,
+    }));
+    setLocalRecords(newRecords);
+    setHasUnsavedChanges(true);
+    setShowTemplateSelector(false);
+    const itemIds = new Set(newRecords.map((r) => r.trainingItemId));
+    setExpandedItems(itemIds);
   };
 
   const formatDate = (dateStr: string) => {
@@ -321,7 +261,7 @@ export default function TrainingRecordPage() {
     });
   };
 
-  if (itemsLoading || recordsLoading) {
+  if (itemsLoading || recordsLoading || templatesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="container mx-auto px-4 py-8">
@@ -339,7 +279,6 @@ export default function TrainingRecordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* ヘッダー */}
         <div className="mb-8">
           <button
             onClick={() => router.back()}
@@ -348,7 +287,6 @@ export default function TrainingRecordPage() {
             <ArrowBackIcon sx={{ fontSize: 20 }} />
             <span className="text-sm font-medium">戻る</span>
           </button>
-
           <div className="flex items-center gap-3 mb-2">
             <CalendarTodayIcon sx={{ fontSize: 32 }} className="text-blue-600" />
             <h1 className="text-3xl lg:text-4xl font-bold text-slate-900">トレーニング記録</h1>
@@ -356,34 +294,94 @@ export default function TrainingRecordPage() {
           <p className="text-lg text-slate-600 ml-11">{formatDate(date)}</p>
         </div>
 
-        {/* エラー表示 */}
-        {(error || formError) && (
+        {formError && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-red-800 font-medium">{error || formError}</p>
+            <p className="text-red-800 font-medium">{formError}</p>
           </div>
         )}
 
-        {/* 新しいトレーニングを登録ボタン */}
-        {!showNewTrainingForm && (
-          <button
-            onClick={() => setShowNewTrainingForm(true)}
-            className="mb-6 w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white font-medium rounded-xl hover:bg-green-700 transition-colors shadow-lg shadow-green-600/25"
-          >
-            <AddIcon sx={{ fontSize: 20 }} />
-            <span>新しいトレーニングを登録</span>
-          </button>
+        {hasUnsavedChanges && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-center justify-between">
+            <p className="text-yellow-800 font-medium">未保存の変更があります</p>
+            <button
+              onClick={handleSaveAll}
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+            >
+              <SaveIcon sx={{ fontSize: 20 }} />
+              <span>{isSubmitting ? "保存中..." : "保存"}</span>
+            </button>
+          </div>
         )}
 
-        {/* 新しいトレーニング登録フォーム */}
+        <div className="mb-6 flex gap-3">
+          {!showTemplateSelector && (
+            <button
+              onClick={() => setShowTemplateSelector(true)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 text-white font-medium rounded-xl hover:bg-purple-700 transition-colors shadow-lg shadow-purple-600/25"
+            >
+              <ListAltIcon sx={{ fontSize: 20 }} />
+              <span>テンプレートから読み込む</span>
+            </button>
+          )}
+          {!showNewTrainingForm && (
+            <button
+              onClick={() => setShowNewTrainingForm(true)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white font-medium rounded-xl hover:bg-green-700 transition-colors shadow-lg shadow-green-600/25"
+            >
+              <AddIcon sx={{ fontSize: 20 }} />
+              <span>新しいトレーニングを登録</span>
+            </button>
+          )}
+        </div>
+
+        {showTemplateSelector && (
+          <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-900 flex items-center gap-2">
+                <ListAltIcon sx={{ fontSize: 24 }} />
+                テンプレートを選択
+              </h2>
+              <button
+                onClick={() => setShowTemplateSelector(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <CloseIcon sx={{ fontSize: 24 }} />
+              </button>
+            </div>
+            {templates.length === 0 ? (
+              <p className="text-slate-600 text-center py-4">テンプレートが登録されていません</p>
+            ) : (
+              <div className="space-y-3">
+                {templates.map((template) => (
+                  <button
+                    key={template.id}
+                    onClick={() => handleApplyTemplate(template.id)}
+                    className="w-full p-4 bg-slate-50 hover:bg-purple-50 border border-slate-200 hover:border-purple-300 rounded-lg transition-colors text-left"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold text-slate-900">{template.name}</h3>
+                        <p className="text-sm text-slate-600">
+                          {template.trainingRecordTemplates.length} 種目
+                        </p>
+                      </div>
+                      <CheckCircleIcon sx={{ fontSize: 24 }} className="text-purple-600" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {showNewTrainingForm && (
           <div className="mb-6 bg-white rounded-xl border border-slate-200 shadow-lg p-6">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <FitnessCenterIcon sx={{ fontSize: 24 }} />
               新しいトレーニングを登録
             </h2>
-
             <form onSubmit={handleNewTrainingSubmit} className="space-y-4">
-              {/* トレーニング種目 */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   トレーニング種目 <span className="text-red-500">*</span>
@@ -406,58 +404,48 @@ export default function TrainingRecordPage() {
                   ))}
                 </select>
               </div>
-
-              {/* 重量 */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   重量 (kg) <span className="text-red-500">*</span>
                 </label>
-                <input
+                <Input
                   type="number"
-                  step="0.5"
                   min="0"
                   value={newTrainingFormData.weight}
                   onChange={(e) =>
                     setNewTrainingFormData({
                       ...newTrainingFormData,
-                      weight: Number(e.target.value),
+                      weight: e.target.value === "" ? "" : Number(e.target.value),
                     })
                   }
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                  placeholder="例: 50"
                   required
                 />
               </div>
-
-              {/* 回数 */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   回数 (rep) <span className="text-red-500">*</span>
                 </label>
-                <input
+                <Input
                   type="number"
                   min="1"
                   value={newTrainingFormData.repetitions}
                   onChange={(e) =>
                     setNewTrainingFormData({
                       ...newTrainingFormData,
-                      repetitions: Number(e.target.value),
+                      repetitions: e.target.value === "" ? "" : Number(e.target.value),
                     })
                   }
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                  placeholder="例: 10"
                   required
                 />
               </div>
-
-              {/* ボタン */}
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 px-4 py-2.5 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
                 >
-                  {isSubmitting ? "登録中..." : "登録"}
+                  追加
                 </button>
                 <button
                   type="button"
@@ -474,7 +462,6 @@ export default function TrainingRecordPage() {
           </div>
         )}
 
-        {/* トレーニング種目別の記録リスト */}
         <div className="space-y-4">
           {groupedRecords.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
@@ -490,18 +477,12 @@ export default function TrainingRecordPage() {
               {groupedRecords.map((group, index) => {
                 const isExpanded = expandedItems.has(group.trainingItemId);
                 const isFormVisible = visibleForms.has(group.trainingItemId);
-                const formData = formDataMap.get(group.trainingItemId) || {
-                  weight: 0,
-                  repetitions: 0,
-                };
-
                 return (
                   <div
                     key={group.trainingItemId}
                     className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    {/* 種目ヘッダー（クリックでトグル） */}
                     <button
                       onClick={() => toggleExpand(group.trainingItemId)}
                       className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
@@ -524,11 +505,8 @@ export default function TrainingRecordPage() {
                         className="text-slate-400"
                       />
                     </button>
-
-                    {/* トグル内容（記録一覧と新規登録フォーム） */}
                     {isExpanded && (
                       <div className="px-5 pb-4 border-t border-slate-200">
-                        {/* 新規登録ボタン */}
                         {!isFormVisible && (
                           <button
                             onClick={() => toggleForm(group.trainingItemId)}
@@ -538,112 +516,33 @@ export default function TrainingRecordPage() {
                             <span>新しいセットを追加</span>
                           </button>
                         )}
-
-                        {/* 登録フォーム */}
                         {isFormVisible && (
-                          <div className="mt-4 p-4 bg-slate-50 rounded-lg">
-                            <h4 className="text-sm font-semibold text-slate-900 mb-3">
-                              新しいセットを追加
-                            </h4>
-
-                            <form
-                              onSubmit={(e) => handleSubmit(e, group.trainingItemId)}
-                              className="space-y-3"
-                            >
-                              {/* 重量 */}
-                              <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                  重量 (kg) <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  step="0.5"
-                                  min="0"
-                                  value={formData.weight}
-                                  onChange={(e) =>
-                                    updateFormData(
-                                      group.trainingItemId,
-                                      "weight",
-                                      Number(e.target.value),
-                                    )
-                                  }
-                                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                                  placeholder="例: 50"
-                                  required
-                                />
-                              </div>
-
-                              {/* 回数 */}
-                              <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                  回数 (rep) <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={formData.repetitions}
-                                  onChange={(e) =>
-                                    updateFormData(
-                                      group.trainingItemId,
-                                      "repetitions",
-                                      Number(e.target.value),
-                                    )
-                                  }
-                                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                                  placeholder="例: 10"
-                                  required
-                                />
-                              </div>
-
-                              {/* ボタン */}
-                              <div className="flex gap-2 pt-1">
-                                <button
-                                  type="submit"
-                                  disabled={isSubmitting}
-                                  className="flex-1 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors text-sm"
-                                >
-                                  {isSubmitting ? "登録中..." : "登録"}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    toggleForm(group.trainingItemId);
-                                    setFormError(null);
-                                  }}
-                                  className="px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors text-sm"
-                                >
-                                  キャンセル
-                                </button>
-                              </div>
-                            </form>
-                          </div>
+                          <AddSetForm
+                            trainingItemId={group.trainingItemId}
+                            onAdd={handleAddRecord}
+                            onCancel={() => toggleForm(group.trainingItemId)}
+                          />
                         )}
-
-                        {/* 記録一覧 */}
                         <div className="mt-4 space-y-2">
                           {group.records.map((record, recordIndex) => {
                             const isEditing = editingRecordId === record.id;
-
                             return (
                               <div
                                 key={record.id}
                                 className="p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
                               >
                                 {isEditing ? (
-                                  // 編集モード
                                   <div className="space-y-3">
                                     <div className="font-medium text-slate-700 text-sm mb-2">
                                       セット {recordIndex + 1} を編集
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
-                                      {/* 重量入力 */}
                                       <div>
                                         <label className="block text-xs font-medium text-slate-600 mb-1">
                                           重量 (kg)
                                         </label>
-                                        <input
+                                        <Input
                                           type="number"
-                                          step="0.5"
                                           min="0"
                                           value={editingData.weight}
                                           onChange={(e) =>
@@ -655,12 +554,11 @@ export default function TrainingRecordPage() {
                                           className="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                         />
                                       </div>
-                                      {/* 回数入力 */}
                                       <div>
                                         <label className="block text-xs font-medium text-slate-600 mb-1">
                                           回数 (rep)
                                         </label>
-                                        <input
+                                        <Input
                                           type="number"
                                           min="1"
                                           value={editingData.repetitions}
@@ -674,14 +572,10 @@ export default function TrainingRecordPage() {
                                         />
                                       </div>
                                     </div>
-                                    {/* ボタン */}
                                     <div className="flex gap-2 pt-1">
                                       <button
-                                        onClick={() =>
-                                          handleEditSave(record.id, group.trainingItemId)
-                                        }
-                                        disabled={isSubmitting}
-                                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                                        onClick={() => handleEditSave(record.id)}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                                       >
                                         <SaveIcon sx={{ fontSize: 16 }} />
                                         <span>保存</span>
@@ -696,7 +590,6 @@ export default function TrainingRecordPage() {
                                     </div>
                                   </div>
                                 ) : (
-                                  // 表示モード
                                   <div className="flex items-center justify-between">
                                     <div className="flex flex-wrap items-center gap-4 text-sm">
                                       <div className="flex items-center gap-2">
@@ -732,7 +625,7 @@ export default function TrainingRecordPage() {
                                         <EditIcon sx={{ fontSize: 18 }} />
                                       </button>
                                       <button
-                                        onClick={() => handleDelete(record.id)}
+                                        onClick={() => handleDeleteRecord(record.id)}
                                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                         aria-label="削除"
                                       >
@@ -754,6 +647,84 @@ export default function TrainingRecordPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AddSetForm({
+  trainingItemId,
+  onAdd,
+  onCancel,
+}: {
+  trainingItemId: number;
+  onAdd: (trainingItemId: number, weight: number, repetitions: number) => void;
+  onCancel: () => void;
+}) {
+  const [weight, setWeight] = useState<number | "">("");
+  const [repetitions, setRepetitions] = useState<number | "">("");
+  const [error, setError] = useState<string | null>(null);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (weight === "" || weight <= 0) {
+      setError("重量は0より大きい値を入力してください");
+      return;
+    }
+    if (repetitions === "" || repetitions <= 0) {
+      setError("回数は1以上の値を入力してください");
+      return;
+    }
+    onAdd(trainingItemId, Number(weight), Number(repetitions));
+    setWeight("");
+    setRepetitions("");
+  };
+  return (
+    <div className="mt-4 p-4 bg-slate-50 rounded-lg">
+      <h4 className="text-sm font-semibold text-slate-900 mb-3">新しいセットを追加</h4>
+      {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            重量 (kg) <span className="text-red-500">*</span>
+          </label>
+          <Input
+            type="number"
+            min="0"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value === "" ? "" : Number(e.target.value))}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            回数 (rep) <span className="text-red-500">*</span>
+          </label>
+          <Input
+            type="number"
+            min="1"
+            value={repetitions}
+            onChange={(e) => setRepetitions(e.target.value === "" ? "" : Number(e.target.value))}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            required
+          />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button
+            type="submit"
+            className="flex-1 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          >
+            追加
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors text-sm"
+          >
+            キャンセル
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

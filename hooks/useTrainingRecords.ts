@@ -104,6 +104,20 @@ export const useTrainingRecords = (initialDate?: string) => {
       throw new Error(e instanceof Error ? e.message : "削除に失敗しました");
     }
   };
+  /**
+   * トレーニング記録を一括更新（洗い替え）
+   */
+  const replaceRecords = async (
+    date: string,
+    records: Array<{ trainingItemId: number; weight: number; repetitions: number }>,
+  ): Promise<void> => {
+    try {
+      await ApiClient.patch("/api/traning_record", { date, records });
+      await fetchRecords(date, date, undefined, false);
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : "保存に失敗しました");
+    }
+  };
 
   /**
    * 初回マウント時にデータを取得
@@ -124,5 +138,6 @@ export const useTrainingRecords = (initialDate?: string) => {
     createRecord,
     updateRecord,
     deleteRecord,
+    replaceRecords,
   };
 };

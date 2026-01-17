@@ -16,13 +16,14 @@ enum BodyPart {
 }
 
 model TrainingItem {
-  id              Int              @id @default(autoincrement())
-  name            String
-  bodyPart        BodyPart
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                      Int                      @id @default(autoincrement())
+  name                    String
+  bodyPart                BodyPart
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
 
-  trainingRecords TrainingRecord[]
+  trainingRecords         TrainingRecord[]
+  trainingRecordTemplates TrainingRecordTemplate[]
 
   @@map("training_items")
 }
@@ -39,4 +40,30 @@ model TrainingRecord {
   trainingItem   TrainingItem @relation(fields: [trainingItemId], references: [id], onDelete: Cascade)
 
   @@map("training_records")
+}
+
+model TrainingTemplate {
+  id                       Int                       @id @default(autoincrement())
+  name                     String
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+
+  trainingRecordTemplates  TrainingRecordTemplate[]
+
+  @@map("training_templates")
+}
+
+model TrainingRecordTemplate {
+  id                 Int              @id @default(autoincrement())
+  trainingTemplateId Int              @map("training_template_id")
+  trainingItemId     Int              @map("training_item_id")
+  weight             Float?
+  repetitions        Int?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  trainingTemplate   TrainingTemplate @relation(fields: [trainingTemplateId], references: [id], onDelete: Cascade)
+  trainingItem       TrainingItem     @relation(fields: [trainingItemId], references: [id], onDelete: Cascade)
+
+  @@map("training_record_templates")
 }

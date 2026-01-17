@@ -1,6 +1,7 @@
 import prisma from "../../../lib/prisma";
 import { TrainingRecordSchema } from "../../schema/schema";
 import { Prisma } from "@prisma/client";
+import { z } from "zod";
 
 export async function GET(request: Request) {
   try {
@@ -204,45 +205,34 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const idParam = searchParams.get("id");
-
-    // IDが指定されているか確認
     if (!idParam) {
       return new Response(JSON.stringify({ error: "ID parameter is required." }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
-
     const id = parseInt(idParam, 10);
-
-    // IDが有効な数値か確認
     if (isNaN(id)) {
       return new Response(JSON.stringify({ error: "Invalid ID format." }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
-
-    // 対象のトレーニング記録が存在するか確認
     const existingRecord = await prisma.trainingRecord.findUnique({
       where: { id },
       include: {
         trainingItem: true,
       },
     });
-
     if (!existingRecord) {
       return new Response(JSON.stringify({ error: "Training record not found." }), {
         status: 404,
         headers: { "Content-Type": "application/json" },
       });
     }
-
-    // トレーニング記録を削除
     await prisma.trainingRecord.delete({
       where: { id },
     });
-
     return new Response(
       JSON.stringify({
         message: "Training record deleted successfully.",
@@ -255,6 +245,97 @@ export async function DELETE(request: Request) {
     );
   } catch (error) {
     console.error("[DELETE /api/traning_record] Error:", error);
+    return new Response(JSON.stringify({ error: "Internal Server Error." }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+const ReplaceRecordsSchema = z.object({
+  date: z.string(),
+  records: z.array(
+    z.object({
+      trainingItemId: z.number(),
+      weight: z.number(),
+      repetitions: z.number(),
+    }),
+  ),
+});
+
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const parsedBody = ReplaceRecordsSchema.safeParse(body);
+    if (!parsedBody.success) {
+      return new Response(
+        JSON.stringify({
+          error: "Bad Request.",
+          details: parsedBody.error.issues,
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    const { date, records } = parsedBody.data;
+    const targetDate = new Date(date);
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    const trainingItemIds = [...new Set(records.map((r) => r.trainingItemId))];
+    const existingItems = await prisma.trainingItem.findMany({
+      where: { id: { in: trainingItemIds } },
+    });
+    if (existingItems.length !== trainingItemIds.length) {
+      const foundIds = existingItems.map((item) => item.id);
+      const missingIds = trainingItemIds.filter((id) => !foundIds.includes(id));
+      return new Response(
+        JSON.stringify({
+          error: "Training items not found.",
+          missingIds,
+        }),
+        {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.trainingRecord.deleteMany({
+        where: {
+          date: {
+            gte: startOfDay,
+            lte: endOfDay,
+          },
+        },
+      });
+      const createdRecords = await tx.trainingRecord.createManyAndReturn({
+        data: records.map((record) => ({
+          date: targetDate,
+          trainingItemId: record.trainingItemId,
+          weight: record.weight,
+          repetitions: record.repetitions,
+        })),
+      });
+      const recordsWithItems = await tx.trainingRecord.findMany({
+        where: {
+          id: { in: createdRecords.map((r) => r.id) },
+        },
+        include: {
+          trainingItem: true,
+        },
+      });
+      return recordsWithItems;
+    });
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    console.error("[PATCH /api/traning_record] Error:", error);
     return new Response(JSON.stringify({ error: "Internal Server Error." }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
