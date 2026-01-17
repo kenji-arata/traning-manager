@@ -1,0 +1,13 @@
+---
+name: code-comment
+description: This is a new rule
+---
+
+# Overview
+
+Insert overview text here. The agent will only see this should they choose to apply the rule.
+
+# Rules
+
+- Do not add code comments
+- Minimize unnecessary line breaks
