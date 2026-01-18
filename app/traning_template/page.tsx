@@ -121,17 +121,20 @@ export default function TrainingTemplatePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="mb-8">
-          <div className="flex items-center justify-between gap-4 mb-2 flex-nowrap">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 whitespace-nowrap">
-              トレーニングテンプレート
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center justify-between gap-2 sm:gap-4 mb-2">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold text-slate-900 leading-tight">
+              トレーニング
+              <br className="sm:hidden" />
+              テンプレート
             </h1>
             <button
               onClick={handleCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors text-sm sm:text-base font-medium shadow-sm whitespace-nowrap flex-shrink-0"
             >
-              <AddIcon sx={{ fontSize: 20 }} />
-              <span className="hidden sm:inline">新規作成</span>
+              <AddIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+              <span className="hidden xs:inline sm:inline">新規</span>
+              <span className="hidden sm:inline">作成</span>
             </button>
           </div>
         </div>
