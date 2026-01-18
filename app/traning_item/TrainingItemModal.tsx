@@ -14,15 +14,7 @@ import {
   Select,
 } from "@headlessui/react";
 import { BODY_PARTS } from "../schema/schema";
-
-const bodyPartLabels: Record<keyof typeof BODY_PARTS, string> = {
-  ARM: "腕",
-  SHOULDER: "肩",
-  CHEST: "胸",
-  LEG: "脚",
-  BACK: "背中",
-  ABS: "腹筋",
-};
+import { BODY_PART_LABELS } from "../../constants/bodyParts";
 
 type TrainingItem = {
   id: number;
@@ -136,7 +128,7 @@ export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit 
                 >
                   {Object.entries(BODY_PARTS).map(([key, value]) => (
                     <option key={value} value={value}>
-                      {bodyPartLabels[key as keyof typeof BODY_PARTS]}
+                      {BODY_PART_LABELS[key as keyof typeof BODY_PARTS]}
                     </option>
                   ))}
                 </Select>

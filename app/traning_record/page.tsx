@@ -71,8 +71,7 @@ export default function TrainingRecordCalendarPage() {
   };
 
   const handleDateClick = (day: number) => {
-    const selectedDate = new Date(year, month, day);
-    const dateStr = selectedDate.toISOString().split("T")[0];
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     router.push(`/traning_record/${dateStr}`);
   };
 
@@ -82,13 +81,13 @@ export default function TrainingRecordCalendarPage() {
   };
 
   const hasTraining = (day: number) => {
-    const dateStr = new Date(year, month, day).toISOString().split("T")[0];
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     return trainingDates.has(dateStr);
   };
 
   const handleStartTodayTraining = () => {
     const today = new Date();
-    const dateStr = today.toISOString().split("T")[0];
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     router.push(`/traning_record/${dateStr}`);
   };
 
