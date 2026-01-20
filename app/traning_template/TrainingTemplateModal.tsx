@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Button,
   Dialog,
@@ -14,14 +14,19 @@ import {
   Disclosure,
   DisclosureButton,
   DisclosurePanel,
+  Listbox,
+  ListboxOption,
+  ListboxOptions,
 } from "@headlessui/react";
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   ExpandMore as ExpandMoreIcon,
   FitnessCenter as FitnessCenterIcon,
+  Check as CheckIcon,
 } from "@mui/icons-material";
 import { useTrainingItems } from "../../hooks/useTrainingItems";
+import { BODY_PART_LABELS } from "../../constants/bodyParts";
 
 type TrainingRecordTemplateInput = {
   trainingItemId: number;
@@ -57,6 +62,9 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
   const [recordTemplates, setRecordTemplates] = useState<TrainingRecordTemplateInput[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isItemSelectOpen, setIsItemSelectOpen] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const itemSelectRef = useRef<HTMLDivElement>(null);
   const isEditMode = !!editTemplate;
 
   useEffect(() => {
@@ -68,14 +76,40 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
       setRecordTemplates([]);
     }
     setError(null);
+    setIsItemSelectOpen(false);
+    setSelectedItemId(null);
   }, [editTemplate, isOpen]);
 
-  const handleAddItem = () => {
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (itemSelectRef.current && !itemSelectRef.current.contains(event.target as Node)) {
+        setIsItemSelectOpen(false);
+      }
+    };
+    if (isItemSelectOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [isItemSelectOpen]);
+
+  const handleOpenItemSelect = () => {
     if (trainingItems.length === 0) return;
+    setIsItemSelectOpen(true);
+    if (trainingItems.length > 0 && !selectedItemId) {
+      setSelectedItemId(trainingItems[0].id);
+    }
+  };
+
+  const handleAddSelectedItem = () => {
+    if (!selectedItemId) return;
     setRecordTemplates([
       ...recordTemplates,
-      { trainingItemId: trainingItems[0].id, weight: null, repetitions: null },
+      { trainingItemId: selectedItemId, weight: null, repetitions: null },
     ]);
+    setIsItemSelectOpen(false);
+    setSelectedItemId(null);
   };
 
   const handleAddItemToGroup = (trainingItemId: number) => {
@@ -168,15 +202,76 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
                   <Label className="block text-sm font-medium text-gray-700">
                     トレーニング種目 <span className="text-red-500">*</span>
                   </Label>
-                  <Button
-                    type="button"
-                    onClick={handleAddItem}
-                    disabled={trainingItems.length === 0}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md data-hover:bg-blue-700 transition-colors data-disabled:opacity-50 data-disabled:cursor-not-allowed"
-                  >
-                    <AddIcon sx={{ fontSize: 16 }} />
-                    種目を追加
-                  </Button>
+                  <div className="relative" ref={itemSelectRef}>
+                    <Button
+                      type="button"
+                      onClick={handleOpenItemSelect}
+                      disabled={trainingItems.length === 0}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md data-hover:bg-blue-700 transition-colors data-disabled:opacity-50 data-disabled:cursor-not-allowed"
+                    >
+                      <AddIcon sx={{ fontSize: 16 }} />
+                      種目を追加
+                    </Button>
+                    {isItemSelectOpen && (
+                      <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                        <div className="p-3 border-b border-gray-200">
+                          <p className="text-sm font-medium text-gray-700">種目を選択</p>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                          <Listbox value={selectedItemId} onChange={setSelectedItemId}>
+                            <ListboxOptions static className="p-1">
+                              {trainingItems.map((item) => (
+                                <ListboxOption
+                                  key={item.id}
+                                  value={item.id}
+                                  className="group flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer data-[focus]:bg-blue-50 data-[selected]:bg-blue-100"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <FitnessCenterIcon sx={{ fontSize: 18, color: "#64748b" }} />
+                                      <span className="text-sm font-medium text-gray-900 truncate">
+                                        {item.name}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs text-gray-500">
+                                      {BODY_PART_LABELS[item.bodyPart]}
+                                    </span>
+                                  </div>
+                                  <CheckIcon
+                                    sx={{
+                                      fontSize: 18,
+                                      color: "#2563eb",
+                                      opacity: selectedItemId === item.id ? 1 : 0,
+                                    }}
+                                  />
+                                </ListboxOption>
+                              ))}
+                            </ListboxOptions>
+                          </Listbox>
+                        </div>
+                        <div className="p-3 border-t border-gray-200 flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              setIsItemSelectOpen(false);
+                              setSelectedItemId(null);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-md data-hover:bg-gray-200 transition-colors"
+                          >
+                            キャンセル
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={handleAddSelectedItem}
+                            disabled={!selectedItemId}
+                            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md data-hover:bg-blue-700 transition-colors data-disabled:opacity-50 data-disabled:cursor-not-allowed"
+                          >
+                            追加
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {trainingItems.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
