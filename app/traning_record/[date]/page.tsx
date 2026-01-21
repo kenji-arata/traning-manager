@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Input } from "@headlessui/react";
 import {
@@ -187,7 +187,7 @@ export default function TrainingRecordPage() {
     );
   };
 
-  const handleResetChanges = () => {
+  const handleResetChanges = useCallback(() => {
     const converted = savedRecords.map((record) => ({
       id: `saved-${record.id}`,
       trainingItemId: record.trainingItemId,
@@ -196,9 +196,9 @@ export default function TrainingRecordPage() {
     }));
     setLocalRecords(converted);
     setFormError(null);
-  };
+  }, [savedRecords]);
 
-  const handleSaveAll = async () => {
+  const handleSaveAll = useCallback(async () => {
     setIsSubmitting(true);
     setFormError(null);
     try {
@@ -218,7 +218,15 @@ export default function TrainingRecordPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [localRecords, replaceRecords, date]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges || isSubmitting) return undefined;
+    const timeoutId = setTimeout(() => {
+      handleSaveAll();
+    }, 10000);
+    return () => clearTimeout(timeoutId);
+  }, [localRecords, hasUnsavedChanges, isSubmitting, handleSaveAll]);
 
   const handleApplyTemplate = (templateId: number) => {
     const template = templates.find((t) => t.id === templateId);
