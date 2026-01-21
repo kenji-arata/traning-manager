@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import useSWR from "swr";
+import useSWRMutation from "swr/mutation";
 import { ApiClient } from "../utils/apiClient";
 import { BODY_PARTS } from "../app/schema/schema";
 
@@ -9,6 +10,14 @@ export type TrainingItem = {
   createdAt: string;
   updatedAt: string;
 };
+
+const fetchTrainingItems = (url: string) => ApiClient.get<TrainingItem[]>(url);
+const createTrainingItemMutation = (url: string, { arg }: { arg: CreateTrainingItemInput }) =>
+  ApiClient.post<TrainingItem>(url, arg);
+const updateTrainingItemMutation = (url: string, { arg }: { arg: UpdateTrainingItemInput }) =>
+  ApiClient.put<TrainingItem>(url, arg);
+const deleteTrainingItemMutation = (url: string, { arg }: { arg: { id: number } }) =>
+  ApiClient.delete<{ message: string; deletedItem: TrainingItem }>(`${url}?id=${arg.id}`);
 
 type CreateTrainingItemInput = {
   name: string;
@@ -21,82 +30,91 @@ type UpdateTrainingItemInput = {
   bodyPart: keyof typeof BODY_PARTS;
 };
 
-/**
- * トレーニングアイテムのCRUD操作と状態管理を提供するhook
- */
+type MutateTrainingItems = () => Promise<TrainingItem[] | undefined>;
+
+const revalidateTrainingItems = async (mutate: MutateTrainingItems) => {
+  await mutate();
+};
+
 export const useTrainingItems = () => {
-  const [items, setItems] = useState<TrainingItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading, mutate } = useSWR("/api/training_item", fetchTrainingItems);
+  const { trigger: createTrigger } = useSWRMutation(
+    "/api/training_item",
+    createTrainingItemMutation,
+  );
+  const { trigger: updateTrigger } = useSWRMutation(
+    "/api/training_item",
+    updateTrainingItemMutation,
+  );
+  const { trigger: deleteTrigger } = useSWRMutation(
+    "/api/training_item",
+    deleteTrainingItemMutation,
+  );
 
-  /**
-   * トレーニングアイテムを取得
-   */
-  const fetchItems = async (isInitialLoad = false) => {
-    try {
-      if (isInitialLoad) {
-        setLoading(true);
-      }
-
-      const data = await ApiClient.get<TrainingItem[]>("/api/training_item");
-      setItems(data);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "データの取得に失敗しました");
-    } finally {
-      if (isInitialLoad) {
-        setLoading(false);
-      }
-    }
-  };
-
-  /**
-   * トレーニングアイテムを作成
-   */
+  const fetchItems = () => revalidateTrainingItems(mutate);
   const createItem = async (input: CreateTrainingItemInput): Promise<void> => {
     try {
-      await ApiClient.post("/api/training_item", input);
-      await fetchItems(false);
+      const optimisticId = Date.now() * -1;
+      const now = new Date().toISOString();
+      const optimisticItem: TrainingItem = {
+        id: optimisticId,
+        name: input.name,
+        bodyPart: input.bodyPart,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await createTrigger(input, {
+        optimisticData: (current: TrainingItem[] | undefined) => [
+          optimisticItem,
+          ...(current ?? []),
+        ],
+        rollbackOnError: true,
+        populateCache: (result, current: TrainingItem[] | undefined) => [
+          result,
+          ...(current ?? []).filter((item) => item.id !== optimisticId),
+        ],
+        revalidate: true,
+      });
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : "登録に失敗しました");
     }
   };
-
-  /**
-   * トレーニングアイテムを更新
-   */
   const updateItem = async (input: UpdateTrainingItemInput): Promise<void> => {
     try {
-      await ApiClient.put("/api/training_item", input);
-      await fetchItems(false);
+      await updateTrigger(input, {
+        optimisticData: (current: TrainingItem[] | undefined) =>
+          (current ?? []).map((item) => (item.id === input.id ? { ...item, ...input } : item)),
+        rollbackOnError: true,
+        populateCache: (result, current: TrainingItem[] | undefined) =>
+          (current ?? []).map((item) => (item.id === input.id ? result : item)),
+        revalidate: true,
+      });
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : "更新に失敗しました");
     }
   };
-
-  /**
-   * トレーニングアイテムを削除
-   */
   const deleteItem = async (id: number): Promise<void> => {
     try {
-      await ApiClient.delete(`/api/training_item?id=${id}`);
-      await fetchItems(false);
+      await deleteTrigger(
+        { id },
+        {
+          optimisticData: (current: TrainingItem[] | undefined) =>
+            (current ?? []).filter((item) => item.id !== id),
+          rollbackOnError: true,
+          populateCache: (_result, current: TrainingItem[] | undefined) =>
+            (current ?? []).filter((item) => item.id !== id),
+          revalidate: true,
+        },
+      );
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : "削除に失敗しました");
     }
   };
 
-  /**
-   * 初回マウント時にデータを取得
-   */
-  useEffect(() => {
-    fetchItems(true);
-  }, []);
-
   return {
-    items,
-    loading,
-    error,
+    items: data ?? [],
+    loading: isLoading,
+    error: error instanceof Error ? error.message : error ? String(error) : null,
     fetchItems,
     createItem,
     updateItem,

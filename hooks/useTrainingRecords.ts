@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import useSWR, { mutate as globalMutate } from "swr";
 import { ApiClient } from "../utils/apiClient";
 
 export type TrainingRecord = {
@@ -16,94 +17,46 @@ export type TrainingRecord = {
   };
 };
 
-type CreateTrainingRecordInput = {
-  date: string;
-  trainingItemId: number;
-  weight: number;
-  repetitions: number;
+const fetchTrainingRecords = (url: string) => ApiClient.get<TrainingRecord[]>(url);
+
+const EMPTY_RECORDS: TrainingRecord[] = [];
+
+type QueryParams = {
+  startDate?: string;
+  endDate?: string;
+  trainingItemId?: number;
 };
 
-type UpdateTrainingRecordInput = CreateTrainingRecordInput & {
-  id: number;
+const buildPath = ({ startDate, endDate, trainingItemId }: QueryParams) => {
+  const params = new URLSearchParams();
+  if (startDate) params.append("start_date", startDate);
+  if (endDate) params.append("end_date", endDate);
+  if (trainingItemId) params.append("training_item_id", trainingItemId.toString());
+  const queryString = params.toString();
+  return `/api/traning_record${queryString ? `?${queryString}` : ""}`;
 };
 
-/**
- * トレーニング記録のCRUD操作と状態管理を提供するhook
- */
 export const useTrainingRecords = (initialDate?: string) => {
-  const [records, setRecords] = useState<TrainingRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState<QueryParams | null>(
+    initialDate ? { startDate: initialDate, endDate: initialDate } : null,
+  );
+  const key = query ? buildPath(query) : null;
+  const { data, error, isLoading } = useSWR<TrainingRecord[]>(key, fetchTrainingRecords);
 
   /**
    * トレーニング記録を取得
    */
-  const fetchRecords = async (
-    startDate?: string,
-    endDate?: string,
-    trainingItemId?: number,
-    isInitialLoad = false,
-  ) => {
+  const fetchRecords = async (startDate?: string, endDate?: string, trainingItemId?: number) => {
     try {
-      if (isInitialLoad) {
-        setLoading(true);
-      }
-
-      const params = new URLSearchParams();
-      if (startDate) params.append("start_date", startDate);
-      if (endDate) params.append("end_date", endDate);
-      if (trainingItemId) params.append("training_item_id", trainingItemId.toString());
-
-      const queryString = params.toString();
-      const path = `/api/traning_record${queryString ? `?${queryString}` : ""}`;
-
-      const data = await ApiClient.get<TrainingRecord[]>(path);
-      setRecords(data);
-      setError(null);
+      const nextQuery = { startDate, endDate, trainingItemId };
+      setQuery(nextQuery);
+      const nextKey = buildPath(nextQuery);
+      await globalMutate(nextKey);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "データの取得に失敗しました");
-    } finally {
-      if (isInitialLoad) {
-        setLoading(false);
-      }
+      throw new Error(e instanceof Error ? e.message : "データの取得に失敗しました");
     }
   };
 
-  /**
-   * トレーニング記録を作成
-   */
-  const createRecord = async (input: CreateTrainingRecordInput): Promise<void> => {
-    try {
-      await ApiClient.post("/api/traning_record", input);
-      await fetchRecords(input.date, input.date, undefined, false);
-    } catch (e) {
-      throw new Error(e instanceof Error ? e.message : "登録に失敗しました");
-    }
-  };
-
-  /**
-   * トレーニング記録を更新
-   */
-  const updateRecord = async (input: UpdateTrainingRecordInput): Promise<void> => {
-    try {
-      await ApiClient.put("/api/traning_record", input);
-      await fetchRecords(input.date, input.date, undefined, false);
-    } catch (e) {
-      throw new Error(e instanceof Error ? e.message : "更新に失敗しました");
-    }
-  };
-
-  /**
-   * トレーニング記録を削除
-   */
-  const deleteRecord = async (id: number, date: string): Promise<void> => {
-    try {
-      await ApiClient.delete(`/api/traning_record?id=${id}`);
-      await fetchRecords(date, date, undefined, false);
-    } catch (e) {
-      throw new Error(e instanceof Error ? e.message : "削除に失敗しました");
-    }
-  };
   /**
    * トレーニング記録を一括更新（洗い替え）
    */
@@ -111,33 +64,46 @@ export const useTrainingRecords = (initialDate?: string) => {
     date: string,
     records: Array<{ trainingItemId: number; weight: number; repetitions: number }>,
   ): Promise<void> => {
+    const targetKey = buildPath({ startDate: date, endDate: date });
+    const now = new Date().toISOString();
     try {
+      await globalMutate(
+        targetKey,
+        (current: TrainingRecord[] | undefined) => {
+          const existing = current ?? [];
+          const trainingItemMap = new Map(
+            existing.map((record) => [record.trainingItemId, record.trainingItem]),
+          );
+          return records.map((record, index) => ({
+            id: (Date.now() + index) * -1,
+            date,
+            trainingItemId: record.trainingItemId,
+            weight: record.weight,
+            repetitions: record.repetitions,
+            createdAt: now,
+            updatedAt: now,
+            trainingItem: trainingItemMap.get(record.trainingItemId) ?? {
+              id: record.trainingItemId,
+              name: "",
+              bodyPart: "",
+            },
+          }));
+        },
+        false,
+      );
       await ApiClient.patch("/api/traning_record", { date, records });
-      await fetchRecords(date, date, undefined, false);
+      await globalMutate(targetKey);
     } catch (e) {
+      await globalMutate(targetKey);
       throw new Error(e instanceof Error ? e.message : "保存に失敗しました");
     }
   };
 
-  /**
-   * 初回マウント時にデータを取得
-   */
-  useEffect(() => {
-    if (initialDate) {
-      fetchRecords(initialDate, initialDate, undefined, true);
-    } else {
-      setLoading(false);
-    }
-  }, [initialDate]);
-
   return {
-    records,
-    loading,
-    error,
+    records: data ?? EMPTY_RECORDS,
+    loading: isLoading,
+    error: error instanceof Error ? error.message : error ? String(error) : null,
     fetchRecords,
-    createRecord,
-    updateRecord,
-    deleteRecord,
     replaceRecords,
   };
 };
