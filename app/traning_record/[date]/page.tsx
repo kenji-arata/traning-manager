@@ -24,8 +24,8 @@ import { BODY_PART_LABELS, BODY_PART_ORDER } from "../../../constants/bodyParts"
 type LocalRecord = {
   id: string;
   trainingItemId: number;
-  weight: number;
-  repetitions: number;
+  weight: number | null;
+  repetitions: number | null;
 };
 
 type GroupedRecords = {
@@ -75,8 +75,12 @@ export default function TrainingRecordPage() {
     if (localRecords.length !== savedRecords.length) return true;
     const sortedLocal = [...localRecords].sort((a, b) => {
       if (a.trainingItemId !== b.trainingItemId) return a.trainingItemId - b.trainingItemId;
-      if (a.weight !== b.weight) return a.weight - b.weight;
-      return a.repetitions - b.repetitions;
+      const aWeight = a.weight ?? -1;
+      const bWeight = b.weight ?? -1;
+      if (aWeight !== bWeight) return aWeight - bWeight;
+      const aReps = a.repetitions ?? -1;
+      const bReps = b.repetitions ?? -1;
+      return aReps - bReps;
     });
     const sortedSaved = [...savedRecords].sort((a, b) => {
       if (a.trainingItemId !== b.trainingItemId) return a.trainingItemId - b.trainingItemId;
@@ -152,8 +156,8 @@ export default function TrainingRecordPage() {
     const newRecord: LocalRecord = {
       id: `temp-${Date.now()}-${Math.random()}`,
       trainingItemId,
-      weight: 0,
-      repetitions: 0,
+      weight: null,
+      repetitions: null,
     };
     setLocalRecords((prev) => [...prev, newRecord]);
     setExpandedItems((prev) => {
@@ -167,8 +171,8 @@ export default function TrainingRecordPage() {
     const newRecord: LocalRecord = {
       id: `temp-${Date.now()}-${Math.random()}`,
       trainingItemId,
-      weight: 0,
-      repetitions: 0,
+      weight: null,
+      repetitions: null,
     };
     setLocalRecords((prev) => [...prev, newRecord]);
   };
@@ -177,7 +181,7 @@ export default function TrainingRecordPage() {
     setLocalRecords((prev) => prev.filter((record) => record.id !== id));
   };
 
-  const handleUpdateRecord = (id: string, weight: number, repetitions: number) => {
+  const handleUpdateRecord = (id: string, weight: number | null, repetitions: number | null) => {
     setLocalRecords((prev) =>
       prev.map((record) => (record.id === id ? { ...record, weight, repetitions } : record)),
     );
@@ -199,11 +203,14 @@ export default function TrainingRecordPage() {
     setFormError(null);
     try {
       const recordsToSave = localRecords
-        .filter((record) => record.weight > 0 && record.repetitions > 0)
+        .filter(
+          (record) =>
+            record.weight !== null && record.repetitions !== null && record.repetitions > 0,
+        )
         .map((record) => ({
           trainingItemId: record.trainingItemId,
-          weight: record.weight,
-          repetitions: record.repetitions,
+          weight: record.weight!,
+          repetitions: record.repetitions!,
         }));
       await replaceRecords(date, recordsToSave);
     } catch (e) {
@@ -219,8 +226,8 @@ export default function TrainingRecordPage() {
     const newRecords: LocalRecord[] = template.trainingRecordTemplates.map((rt, index) => ({
       id: `template-${Date.now()}-${index}`,
       trainingItemId: rt.trainingItemId,
-      weight: rt.weight ?? 0,
-      repetitions: rt.repetitions ?? 0,
+      weight: rt.weight ?? null,
+      repetitions: rt.repetitions ?? null,
     }));
     setLocalRecords(newRecords);
     setShowTemplateSelector(false);
@@ -493,19 +500,19 @@ function RecordItem({
 }: {
   record: LocalRecord;
   recordIndex: number;
-  onUpdate: (id: string, weight: number, repetitions: number) => void;
+  onUpdate: (id: string, weight: number | null, repetitions: number | null) => void;
   onDelete: (id: string) => void;
   onAddRecord: (trainingItemId: number) => void;
   trainingItemId: number;
   isLastRecord: boolean;
 }) {
-  const [weight, setWeight] = useState(record.weight);
-  const [repetitions, setRepetitions] = useState(record.repetitions);
-  const handleWeightChange = (value: number) => {
+  const [weight, setWeight] = useState<number | null>(record.weight);
+  const [repetitions, setRepetitions] = useState<number | null>(record.repetitions);
+  const handleWeightChange = (value: number | null) => {
     setWeight(value);
     onUpdate(record.id, value, repetitions);
   };
-  const handleRepetitionsChange = (value: number) => {
+  const handleRepetitionsChange = (value: number | null) => {
     setRepetitions(value);
     onUpdate(record.id, weight, value);
   };
@@ -539,8 +546,10 @@ function RecordItem({
               type="number"
               min="0"
               placeholder="重量"
-              value={weight}
-              onChange={(e) => handleWeightChange(Number(e.target.value))}
+              value={weight ?? ""}
+              onChange={(e) =>
+                handleWeightChange(e.target.value === "" ? null : Number(e.target.value))
+              }
               className="w-16 px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             <span className="text-xs text-slate-500 w-6">kg</span>
@@ -550,15 +559,19 @@ function RecordItem({
               type="number"
               min="0"
               placeholder="回数"
-              value={repetitions}
-              onChange={(e) => handleRepetitionsChange(Number(e.target.value))}
+              value={repetitions ?? ""}
+              onChange={(e) =>
+                handleRepetitionsChange(e.target.value === "" ? null : Number(e.target.value))
+              }
               className="w-16 px-2 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             <span className="text-xs text-slate-500 w-6">rep</span>
           </div>
           <div className="flex items-center gap-1.5 col-span-2 sm:col-span-1">
             <span className="text-xs text-slate-600">総重量:</span>
-            <span className="font-bold text-purple-600 text-sm">{weight * repetitions} kg</span>
+            <span className="font-bold text-purple-600 text-sm">
+              {(weight ?? 0) * (repetitions ?? 0)} kg
+            </span>
           </div>
         </div>
       </div>
