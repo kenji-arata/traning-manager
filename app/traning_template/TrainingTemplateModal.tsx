@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Button,
   Dialog,
@@ -26,7 +26,7 @@ import {
   Check as CheckIcon,
 } from "@mui/icons-material";
 import { useTrainingItems } from "../../hooks/useTrainingItems";
-import { BODY_PART_LABELS } from "../../constants/bodyParts";
+import { BODY_PART_LABELS, BODY_PART_ORDER } from "../../constants/bodyParts";
 
 type TrainingRecordTemplateInput = {
   trainingItemId: number;
@@ -67,6 +67,17 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
   const itemSelectRef = useRef<HTMLDivElement>(null);
   const isEditMode = !!editTemplate;
 
+  const sortedTrainingItems = useMemo(() => {
+    return [...trainingItems].sort((a, b) => {
+      const aOrder = BODY_PART_ORDER.indexOf(a.bodyPart);
+      const bOrder = BODY_PART_ORDER.indexOf(b.bodyPart);
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      return a.name.localeCompare(b.name, "ja");
+    });
+  }, [trainingItems]);
+
   useEffect(() => {
     if (editTemplate) {
       setName(editTemplate.name);
@@ -95,10 +106,10 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
   }, [isItemSelectOpen]);
 
   const handleOpenItemSelect = () => {
-    if (trainingItems.length === 0) return;
+    if (sortedTrainingItems.length === 0) return;
     setIsItemSelectOpen(true);
-    if (trainingItems.length > 0 && !selectedItemId) {
-      setSelectedItemId(trainingItems[0].id);
+    if (sortedTrainingItems.length > 0 && !selectedItemId) {
+      setSelectedItemId(sortedTrainingItems[0].id);
     }
   };
 
@@ -206,7 +217,7 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
                     <Button
                       type="button"
                       onClick={handleOpenItemSelect}
-                      disabled={trainingItems.length === 0}
+                      disabled={sortedTrainingItems.length === 0}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md data-hover:bg-blue-700 transition-colors data-disabled:opacity-50 data-disabled:cursor-not-allowed"
                     >
                       <AddIcon sx={{ fontSize: 16 }} />
@@ -220,7 +231,7 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
                         <div className="max-h-64 overflow-y-auto">
                           <Listbox value={selectedItemId} onChange={setSelectedItemId}>
                             <ListboxOptions static className="p-1">
-                              {trainingItems.map((item) => (
+                              {sortedTrainingItems.map((item) => (
                                 <ListboxOption
                                   key={item.id}
                                   value={item.id}
@@ -273,7 +284,7 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
                     )}
                   </div>
                 </div>
-                {trainingItems.length === 0 ? (
+                {sortedTrainingItems.length === 0 ? (
                   <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
                     <p className="text-sm text-gray-600">トレーニング種目が登録されていません</p>
                   </div>
