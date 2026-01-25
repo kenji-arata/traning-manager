@@ -7,6 +7,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import FitnessCenterIcon from "@mui/icons-material/FitnessCenter";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import DescriptionIcon from "@mui/icons-material/Description";
+import HistoryIcon from "@mui/icons-material/History";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
@@ -20,6 +21,11 @@ const menuItems = [
     path: "/traning_record",
     label: "トレーニング記録",
     icon: <FitnessCenterIcon />,
+  },
+  {
+    path: "/traning_record_detail",
+    label: "実績詳細",
+    icon: <HistoryIcon />,
   },
   {
     path: "/traning_item",
