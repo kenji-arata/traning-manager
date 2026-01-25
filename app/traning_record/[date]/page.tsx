@@ -109,7 +109,7 @@ export default function TrainingRecordPage() {
       return {
         trainingItemId: item.id,
         trainingItemName: item.name,
-        bodyPart: item.bodyPart,
+        bodyPart: item.bodyPartMaster?.name || "",
         records: itemRecords,
       };
     })
@@ -121,10 +121,11 @@ export default function TrainingRecordPage() {
 
   const availableItemsByBodyPart = availableItems.reduce(
     (acc, item) => {
-      if (!acc[item.bodyPart]) {
-        acc[item.bodyPart] = [];
+      const bodyPartName = item.bodyPartMaster?.name || "";
+      if (!acc[bodyPartName]) {
+        acc[bodyPartName] = [];
       }
-      acc[item.bodyPart].push(item);
+      acc[bodyPartName].push(item);
       return acc;
     },
     {} as Record<string, typeof availableItems>,
