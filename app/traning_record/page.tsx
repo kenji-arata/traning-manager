@@ -1,45 +1,47 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarToday as CalendarTodayIcon,
   ChevronLeft,
   ChevronRight,
   FitnessCenter as FitnessCenterIcon,
+  BarChart as BarChartIcon,
 } from "@mui/icons-material";
+import { useWeeklyStats } from "../../hooks/useWeeklyStats";
+import { useTrainingRecords } from "../../hooks/useTrainingRecords";
 
 export default function TrainingRecordCalendarPage() {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [trainingDates, setTrainingDates] = useState<Set<string>>(new Set());
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  useEffect(() => {
-    const fetchTrainingRecords = async () => {
-      try {
-        const startDate = new Date(year, month, 1).toISOString().split("T")[0];
-        const endDate = new Date(year, month + 1, 0).toISOString().split("T")[0];
-        const response = await fetch(
-          `/api/traning_record?start_date=${startDate}&end_date=${endDate}`,
-        );
-        if (response.ok) {
-          const records = await response.json();
-          const dates = new Set<string>();
-          records.forEach((record: { date: string }) => {
-            const recordDate = new Date(record.date).toISOString().split("T")[0];
-            dates.add(recordDate);
-          });
-          setTrainingDates(dates);
-        }
-      } catch (error) {
-        console.error("Failed to fetch training records:", error);
-      }
-    };
-    fetchTrainingRecords();
-  }, [year, month]);
+  // ローカル時間で日付文字列を作成（UTC時間のtoISOString()はずれるため）
+  const formatLocalDate = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const startDate = formatLocalDate(new Date(year, month, 1));
+  const endDate = formatLocalDate(new Date(year, month + 1, 0));
+
+  const { records } = useTrainingRecords(startDate, endDate);
+  const { stats: weeklyStats } = useWeeklyStats(startDate, endDate);
+
+  // トレーニング記録がある日付のセットを作成
+  const trainingDates = useMemo(() => {
+    const dates = new Set<string>();
+    records.forEach((record) => {
+      const recordDate = new Date(record.date).toISOString().split("T")[0];
+      dates.add(recordDate);
+    });
+    return dates;
+  }, [records]);
 
   const generateCalendar = () => {
     const firstDay = new Date(year, month, 1);
@@ -91,6 +93,32 @@ export default function TrainingRecordCalendarPage() {
     router.push(`/traning_record/${dateStr}`);
   };
 
+  const formatWeekRange = (weekStart: string) => {
+    // 文字列をローカル時間の日付として解釈（UTCとのずれを防ぐ）
+    const [year, month, day] = weekStart.split("-").map(Number);
+    const start = new Date(year, month - 1, day);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+
+    const formatDate = (date: Date) => {
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    };
+
+    return `${formatDate(start)} - ${formatDate(end)}`;
+  };
+
+  // fix
+  const getBodyPartColor = (bodyPartName: string) => {
+    const colors: Record<string, string> = {
+      胸: "bg-red-100 text-red-700",
+      背中: "bg-blue-100 text-blue-700",
+      肩: "bg-yellow-100 text-yellow-700",
+      腕: "bg-green-100 text-green-700",
+      足: "bg-orange-100 text-orange-700",
+    };
+    return colors[bodyPartName] || "bg-gray-100 text-gray-700";
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -108,7 +136,7 @@ export default function TrainingRecordCalendarPage() {
           <FitnessCenterIcon sx={{ fontSize: 24 }} />
           <span>今日のトレーニングを開始</span>
         </button>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between mb-6">
             <button
               onClick={goToPreviousMonth}
@@ -177,6 +205,35 @@ export default function TrainingRecordCalendarPage() {
             })}
           </div>
         </div>
+
+        {/* 週次統計セクション */}
+        {weeklyStats.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <BarChartIcon sx={{ fontSize: 28 }} className="text-blue-600" />
+              <h2 className="text-xl font-semibold text-slate-900">週ごとの実績</h2>
+            </div>
+            <div className="space-y-4">
+              {weeklyStats.map((week) => (
+                <div key={week.weekStart} className="border-l-4 border-blue-500 pl-4 py-2">
+                  <h3 className="font-semibold text-slate-800 mb-3">
+                    {formatWeekRange(week.weekStart)}
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {week.bodyParts.map((bodyPart) => (
+                      <div
+                        key={bodyPart.name}
+                        className={`px-3 py-1.5 rounded-lg font-medium text-sm ${getBodyPartColor(bodyPart.name)}`}
+                      >
+                        {bodyPart.name}: {bodyPart.sets.toFixed(1)}セット
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

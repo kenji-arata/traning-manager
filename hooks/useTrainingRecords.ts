@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
 import { ApiClient } from "../utils/apiClient";
 
@@ -71,12 +71,28 @@ const buildOptimisticRecords = (
   }));
 };
 
-export const useTrainingRecords = (initialDate?: string) => {
-  const [query, setQuery] = useState<QueryParams | null>(
-    initialDate ? { startDate: initialDate, endDate: initialDate } : null,
-  );
+export const useTrainingRecords = (initialDateOrStartDate?: string, initialEndDate?: string) => {
+  const [query, setQuery] = useState<QueryParams | null>(() => {
+    if (initialDateOrStartDate && initialEndDate) {
+      // startDateとendDateの両方が指定された場合
+      return { startDate: initialDateOrStartDate, endDate: initialEndDate };
+    } else if (initialDateOrStartDate) {
+      // 単一の日付が指定された場合（後方互換性）
+      return { startDate: initialDateOrStartDate, endDate: initialDateOrStartDate };
+    }
+    return null;
+  });
   const key = query ? buildPath(query) : null;
   const { data, error, isLoading } = useSWR<TrainingRecord[]>(key, fetchTrainingRecords);
+
+  // 初期パラメータが変わったら、queryを更新
+  useEffect(() => {
+    if (initialDateOrStartDate && initialEndDate) {
+      setQuery({ startDate: initialDateOrStartDate, endDate: initialEndDate });
+    } else if (initialDateOrStartDate) {
+      setQuery({ startDate: initialDateOrStartDate, endDate: initialDateOrStartDate });
+    }
+  }, [initialDateOrStartDate, initialEndDate]);
 
   /**
    * トレーニング記録を取得
