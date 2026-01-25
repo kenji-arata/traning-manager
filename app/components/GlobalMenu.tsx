@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -16,6 +15,12 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Box from "@mui/material/Box";
 import Tooltip from "@mui/material/Tooltip";
+
+export const MENU_DIMENSIONS = {
+  open: 280,
+  closed: 72,
+  header: 64,
+} as const;
 const menuItems = [
   {
     path: "/traning_record",
@@ -38,32 +43,36 @@ const menuItems = [
     icon: <DescriptionIcon />,
   },
 ];
-export const GlobalMenu = () => {
-  const [isOpen, setIsOpen] = useState(false);
+type Props = {
+  mode: "mobile" | "desktop";
+  isOpen: boolean;
+  onToggle: () => void;
+};
+
+export const GlobalMenu = ({ mode, isOpen, onToggle }: Props) => {
   const pathname = usePathname();
-  const toggleMenu = () => {
-    setIsOpen(!isOpen);
-  };
+  if (mode === "mobile" && !isOpen) return null;
+  const showLabels = mode === "mobile" ? true : isOpen;
   return (
     <Box
       sx={{
         position: "fixed",
-        top: 0,
+        top: mode === "mobile" ? MENU_DIMENSIONS.header : 0,
         left: 0,
-        height: "100vh",
-        width: isOpen ? 280 : 72,
-        background: "linear-gradient(180deg, #667eea 0%, #764ba2 100%)",
-        boxShadow: isOpen
-          ? "4px 0 24px rgba(102, 126, 234, 0.3)"
-          : "2px 0 12px rgba(102, 126, 234, 0.2)",
+        height: mode === "mobile" ? `calc(100vh - ${MENU_DIMENSIONS.header}px)` : "100vh",
+        width: isOpen ? MENU_DIMENSIONS.open : MENU_DIMENSIONS.closed,
+        background: "linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%)",
+        boxShadow: "4px 0 24px rgba(14, 165, 233, 0.3)",
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         zIndex: 40,
         display: "flex",
         flexDirection: "column",
+        borderRadius: 0,
+        overflow: "hidden",
       }}
     >
       <Box
-        onClick={toggleMenu}
+        onClick={onToggle}
         sx={{
           display: "flex",
           alignItems: "center",
@@ -118,7 +127,7 @@ export const GlobalMenu = () => {
                 py: 1.5,
                 mb: 1,
                 transition: "all 0.2s ease-in-out",
-                justifyContent: isOpen ? "flex-start" : "center",
+                justifyContent: showLabels ? "flex-start" : "center",
                 "&.Mui-selected": {
                   bgcolor: "rgba(255, 255, 255, 0.2)",
                   "&:hover": {
@@ -133,14 +142,14 @@ export const GlobalMenu = () => {
               <ListItemIcon
                 sx={{
                   color: "white",
-                  minWidth: isOpen ? 48 : "auto",
+                  minWidth: showLabels ? 48 : "auto",
                   justifyContent: "center",
                   transition: "all 0.2s ease-in-out",
                 }}
               >
                 {item.icon}
               </ListItemIcon>
-              {isOpen && (
+              {showLabels && (
                 <ListItemText
                   primary={item.label}
                   primaryTypographyProps={{
@@ -154,12 +163,12 @@ export const GlobalMenu = () => {
           );
           return (
             <ListItem key={item.path} disablePadding>
-              {isOpen ? (
-                listItemButton
-              ) : (
+              {mode === "desktop" && !isOpen ? (
                 <Tooltip title={item.label} placement="right" arrow>
                   {listItemButton}
                 </Tooltip>
+              ) : (
+                listItemButton
               )}
             </ListItem>
           );
