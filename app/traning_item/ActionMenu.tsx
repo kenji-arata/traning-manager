@@ -6,18 +6,18 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import TrainingItemModal from "./TrainingItemModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
-import { BODY_PARTS } from "../schema/schema";
-
 type Props = {
   item: {
     id: number;
     name: string;
-    bodyPart: keyof typeof BODY_PARTS;
+    bodyPartMasterId: number;
+    secondaryBodyPartIds?: number[];
   };
   updateItem: (input: {
     id: number;
     name: string;
-    bodyPart: keyof typeof BODY_PARTS;
+    bodyPartMasterId: number;
+    secondaryBodyPartIds?: number[];
   }) => Promise<void>;
   deleteItem: (id: number) => Promise<void>;
 };
