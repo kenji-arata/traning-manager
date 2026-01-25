@@ -6,6 +6,7 @@ export async function GET() {
     const trainingItems = await prisma.trainingItem.findMany({
       orderBy: { createdAt: "desc" },
       include: {
+        bodyPartMaster: true,
         trainingItemBodyParts: {
           select: {
             bodyPartId: true,
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     const trainingItem = await prisma.trainingItem.create({
       data: {
         name: parsedBody.data.name,
-        bodyPart: parsedBody.data.bodyPart,
+        bodyPartMasterId: parsedBody.data.bodyPartMasterId,
         trainingItemBodyParts: parsedBody.data.secondaryBodyPartIds
           ? {
               create: parsedBody.data.secondaryBodyPartIds.map((bodyPartId) => ({
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
           : undefined,
       },
       include: {
+        bodyPartMaster: true,
         trainingItemBodyParts: {
           select: {
             bodyPartId: true,
@@ -76,7 +78,9 @@ export async function POST(request: Request) {
     // secondaryBodyPartIdsを含む形式に変換
     const formattedItem = {
       ...trainingItem,
-      secondaryBodyPartIds: trainingItem.trainingItemBodyParts.map((bp) => bp.bodyPartId),
+      secondaryBodyPartIds: (trainingItem.trainingItemBodyParts as { bodyPartId: number }[]).map(
+        (bp: { bodyPartId: number }) => bp.bodyPartId,
+      ),
       trainingItemBodyParts: undefined,
     };
 
@@ -135,7 +139,7 @@ export async function PUT(request: Request) {
       where: { id: parsedBody.data.id },
       data: {
         name: parsedBody.data.name,
-        bodyPart: parsedBody.data.bodyPart,
+        bodyPartMasterId: parsedBody.data.bodyPartMasterId,
         trainingItemBodyParts: {
           // 既存のsecondaryBodyPartsを削除
           deleteMany: {},
@@ -148,6 +152,7 @@ export async function PUT(request: Request) {
         },
       },
       include: {
+        bodyPartMaster: true,
         trainingItemBodyParts: {
           select: {
             bodyPartId: true,

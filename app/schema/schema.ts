@@ -19,15 +19,7 @@ export type BodyPartType = z.infer<typeof BodyPartSchema>;
 export const TrainingItemSchema = z.object({
   id: z.number().optional(),
   name: z.string().min(1, "名前を入力してください"),
-  bodyPart: z.enum([
-    BODY_PARTS.ARM,
-    BODY_PARTS.SHOULDER,
-    BODY_PARTS.CHEST,
-    BODY_PARTS.LEG,
-    BODY_PARTS.BACK,
-    BODY_PARTS.ABS,
-  ]),
-  bodyPartMasterId: z.number().optional(),
+  bodyPartMasterId: z.number(),
   secondaryBodyPartIds: z.array(z.number()).optional(),
 });
 

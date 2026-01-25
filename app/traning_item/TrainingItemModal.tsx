@@ -14,27 +14,25 @@ import {
   Select,
   Checkbox,
 } from "@headlessui/react";
-import { BODY_PARTS } from "../schema/schema";
-import { BODY_PART_LABELS } from "../../constants/bodyParts";
 import { useBodyParts } from "../../hooks/useBodyParts";
 
 type TrainingItem = {
   id: number;
   name: string;
-  bodyPart: keyof typeof BODY_PARTS;
+  bodyPartMasterId: number;
   secondaryBodyPartIds?: number[];
 };
 
 type CreateInput = {
   name: string;
-  bodyPart: keyof typeof BODY_PARTS;
+  bodyPartMasterId: number;
   secondaryBodyPartIds?: number[];
 };
 
 type UpdateInput = {
   id: number;
   name: string;
-  bodyPart: keyof typeof BODY_PARTS;
+  bodyPartMasterId: number;
   secondaryBodyPartIds?: number[];
 };
 
@@ -47,7 +45,7 @@ type Props = {
 
 export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit }: Props) {
   const [name, setName] = useState("");
-  const [bodyPart, setBodyPart] = useState<keyof typeof BODY_PARTS>("ARM");
+  const [bodyPartMasterId, setBodyPartMasterId] = useState<number | null>(null);
   const [secondaryBodyPartIds, setSecondaryBodyPartIds] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,31 +57,37 @@ export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit 
   useEffect(() => {
     if (editItem) {
       setName(editItem.name);
-      setBodyPart(editItem.bodyPart);
+      setBodyPartMasterId(editItem.bodyPartMasterId);
       setSecondaryBodyPartIds(editItem.secondaryBodyPartIds ?? []);
     } else {
       setName("");
-      setBodyPart("ARM");
+      setBodyPartMasterId(bodyParts.length > 0 ? bodyParts[0].id : null);
       setSecondaryBodyPartIds([]);
     }
     setError(null);
-  }, [editItem, isOpen]);
+  }, [editItem, isOpen, bodyParts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
 
+    if (bodyPartMasterId === null) {
+      setError("部位を選択してください");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const input = isEditMode
-        ? { id: editItem.id, name, bodyPart, secondaryBodyPartIds }
-        : { name, bodyPart, secondaryBodyPartIds };
+        ? { id: editItem.id, name, bodyPartMasterId, secondaryBodyPartIds }
+        : { name, bodyPartMasterId, secondaryBodyPartIds };
 
       await onSubmit(input);
 
       // 成功したらフォームをリセットしてモーダルを閉じる
       setName("");
-      setBodyPart("ARM");
+      setBodyPartMasterId(bodyParts.length > 0 ? bodyParts[0].id : null);
       setSecondaryBodyPartIds([]);
       onClose();
     } catch (err) {
@@ -137,19 +141,25 @@ export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit 
 
               <Field>
                 <Label className="block text-sm font-medium text-gray-700 mb-1">
-                  部位 <span className="text-red-500">*</span>
+                  メイン部位 <span className="text-red-500">*</span>
                 </Label>
-                <Select
-                  value={bodyPart}
-                  onChange={(e) => setBodyPart(e.target.value as keyof typeof BODY_PARTS)}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {Object.entries(BODY_PARTS).map(([key, value]) => (
-                    <option key={value} value={value}>
-                      {BODY_PART_LABELS[key as keyof typeof BODY_PARTS]}
-                    </option>
-                  ))}
-                </Select>
+                {bodyPartsLoading ? (
+                  <div className="text-sm text-gray-500">読み込み中...</div>
+                ) : bodyParts.length === 0 ? (
+                  <div className="text-sm text-red-500">部位データがありません</div>
+                ) : (
+                  <Select
+                    value={bodyPartMasterId ?? ""}
+                    onChange={(e) => setBodyPartMasterId(Number(e.target.value))}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    {bodyParts.map((bp) => (
+                      <option key={bp.id} value={bp.id}>
+                        {bp.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
               </Field>
 
               <Field>
@@ -165,31 +175,33 @@ export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit 
                         サブ部位データがありません
                       </div>
                     ) : (
-                      bodyParts.map((bp) => (
-                        <div key={bp.id} className="flex items-center">
-                          <Checkbox
-                            checked={secondaryBodyPartIds.includes(bp.id)}
-                            onChange={() => handleSecondaryBodyPartToggle(bp.id)}
-                            className="group mr-2 size-4 rounded border border-gray-300 bg-white data-checked:bg-blue-600 data-checked:border-blue-600"
-                          >
-                            <svg
-                              className="stroke-white opacity-0 group-data-checked:opacity-100"
-                              viewBox="0 0 14 14"
-                              fill="none"
+                      bodyParts
+                        .filter((bp) => bp.id !== bodyPartMasterId)
+                        .map((bp) => (
+                          <div key={bp.id} className="flex items-center">
+                            <Checkbox
+                              checked={secondaryBodyPartIds.includes(bp.id)}
+                              onChange={() => handleSecondaryBodyPartToggle(bp.id)}
+                              className="group mr-2 size-4 rounded border border-gray-300 bg-white data-checked:bg-blue-600 data-checked:border-blue-600"
                             >
-                              <path
-                                d="M3 8L6 11L11 3.5"
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          </Checkbox>
-                          <Label className="text-sm text-gray-700 cursor-pointer">
-                            {bp.name}
-                          </Label>
-                        </div>
-                      ))
+                              <svg
+                                className="stroke-white opacity-0 group-data-checked:opacity-100"
+                                viewBox="0 0 14 14"
+                                fill="none"
+                              >
+                                <path
+                                  d="M3 8L6 11L11 3.5"
+                                  strokeWidth={2}
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </Checkbox>
+                            <Label className="text-sm text-gray-700 cursor-pointer">
+                              {bp.name}
+                            </Label>
+                          </div>
+                        ))
                     )}
                   </div>
                 )}

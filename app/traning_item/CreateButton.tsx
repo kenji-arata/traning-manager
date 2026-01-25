@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { Button } from "@headlessui/react";
 import TrainingItemModal from "./TrainingItemModal";
-import { BODY_PARTS } from "../schema/schema";
 
 type Props = {
-  createItem: (input: { name: string; bodyPart: keyof typeof BODY_PARTS }) => Promise<void>;
+  createItem: (input: {
+    name: string;
+    bodyPartMasterId: number;
+    secondaryBodyPartIds?: number[];
+  }) => Promise<void>;
 };
 
 export default function CreateButton({ createItem }: Props) {

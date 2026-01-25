@@ -30,12 +30,11 @@ model BodyPartMaster {
 model TrainingItem {
   id                      Int                      @id @default(autoincrement())
   name                    String
-  bodyPart                BodyPart                 
-  bodyPartMasterId        Int?                     @map("body_part_master_id")
+  bodyPartMasterId        Int                      @map("body_part_master_id")
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
 
-  bodyPartMaster          BodyPartMaster?          @relation(fields: [bodyPartMasterId], references: [id])
+  bodyPartMaster          BodyPartMaster           @relation(fields: [bodyPartMasterId], references: [id])
   trainingRecords         TrainingRecord[]
   trainingRecordTemplates TrainingRecordTemplate[]
   trainingItemBodyParts   TrainingItemBodyPart[]

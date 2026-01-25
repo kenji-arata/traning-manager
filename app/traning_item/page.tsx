@@ -14,43 +14,11 @@ import {
   AccessTime as AccessTimeIcon,
   Delete as DeleteIcon,
 } from "@mui/icons-material";
-import { BODY_PARTS } from "../schema/schema";
 import { useTrainingItems, type TrainingItem } from "../../hooks/useTrainingItems";
 import { useBodyParts } from "../../hooks/useBodyParts";
 import CreateButton from "./CreateButton";
 import TrainingItemModal from "./TrainingItemModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
-
-// 部位の日本語変換
-const bodyPartLabels: Record<keyof typeof BODY_PARTS, string> = {
-  ARM: "腕",
-  SHOULDER: "肩",
-  CHEST: "胸",
-  LEG: "脚",
-  BACK: "背中",
-  ABS: "腹筋",
-};
-
-// 部位ごとの色
-const bodyPartColors: Record<keyof typeof BODY_PARTS, string> = {
-  ARM: "bg-purple-100 text-purple-800 border-purple-200",
-  SHOULDER: "bg-orange-100 text-orange-800 border-orange-200",
-  CHEST: "bg-blue-100 text-blue-800 border-blue-200",
-  LEG: "bg-green-100 text-green-800 border-green-200",
-  BACK: "bg-indigo-100 text-indigo-800 border-indigo-200",
-  ABS: "bg-pink-100 text-pink-800 border-pink-200",
-};
-
-// タブの定義
-const tabs = [
-  { key: "ALL", label: "全て", Icon: GridViewIcon },
-  { key: "ARM", label: "腕", Icon: FitnessCenterIcon },
-  { key: "SHOULDER", label: "肩", Icon: SelfImprovementIcon },
-  { key: "CHEST", label: "胸", Icon: FavoriteBorderIcon },
-  { key: "LEG", label: "脚", Icon: DirectionsRunIcon },
-  { key: "BACK", label: "背中", Icon: AccessibilityIcon },
-  { key: "ABS", label: "腹筋", Icon: WhatshotIcon },
-] as const;
 
 export default function TrainingItemPage() {
   const { items, loading, error, createItem, updateItem, deleteItem } = useTrainingItems();
@@ -61,16 +29,28 @@ export default function TrainingItemPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<TrainingItem | null>(null);
 
-  const getBodyPartName = (bodyPartId: number): string => {
-    const bodyPart = bodyParts.find((bp) => bp.id === bodyPartId);
+  // bodyPartMasterIdからボディパート名を取得
+  const getBodyPartName = (bodyPartMasterId: number): string => {
+    const bodyPart = bodyParts.find((bp) => bp.id === bodyPartMasterId);
     return bodyPart?.name ?? "不明";
   };
 
-  const filterByBodyPart = (bodyPart: string): TrainingItem[] => {
-    if (bodyPart === "ALL") {
+  // タブの定義を動的に生成
+  const tabs = [
+    { key: "ALL", label: "全て", Icon: GridViewIcon },
+    ...bodyParts.map((bp) => ({
+      key: bp.id.toString(),
+      label: bp.name,
+      Icon: FitnessCenterIcon, // デフォルトアイコン
+    })),
+  ];
+
+  const filterByBodyPart = (tabKey: string): TrainingItem[] => {
+    if (tabKey === "ALL") {
       return items;
     }
-    return items.filter((item) => item.bodyPart === bodyPart);
+    const bodyPartId = parseInt(tabKey, 10);
+    return items.filter((item) => item.bodyPartMasterId === bodyPartId);
   };
 
   if (loading) {
@@ -121,6 +101,8 @@ export default function TrainingItemPage() {
             <TabList className="flex gap-2 overflow-x-auto pb-2 mb-6">
               {tabs.map((tab) => {
                 const IconComponent = tab.Icon;
+                const filteredCount =
+                  tab.key === "ALL" ? items.length : filterByBodyPart(tab.key).length;
                 return (
                   <Tab
                     key={tab.key}
@@ -135,7 +117,7 @@ export default function TrainingItemPage() {
                     <IconComponent sx={{ fontSize: 20 }} />
                     <span>{tab.label}</span>
                     <span className="data-selected:bg-blue-500 data-selected:text-white bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs font-semibold">
-                      {tab.key === "ALL" ? items.length : filterByBodyPart(tab.key).length}
+                      {filteredCount}
                     </span>
                   </Tab>
                 );
@@ -176,10 +158,8 @@ export default function TrainingItemPage() {
                                     <h3 className="text-lg font-semibold text-slate-900 truncate">
                                       {item.name}
                                     </h3>
-                                    <span
-                                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${bodyPartColors[item.bodyPart]}`}
-                                    >
-                                      {bodyPartLabels[item.bodyPart]}
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border bg-blue-100 text-blue-800 border-blue-200">
+                                      {getBodyPartName(item.bodyPartMasterId)}
                                     </span>
                                   </div>
                                   {item.secondaryBodyPartIds &&

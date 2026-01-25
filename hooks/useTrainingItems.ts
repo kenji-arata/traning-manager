@@ -1,12 +1,15 @@
 import useSWR from "swr";
 import useSWRMutation from "swr/mutation";
 import { ApiClient } from "../utils/apiClient";
-import { BODY_PARTS } from "../app/schema/schema";
 
 export type TrainingItem = {
   id: number;
   name: string;
-  bodyPart: keyof typeof BODY_PARTS;
+  bodyPartMasterId: number;
+  bodyPartMaster?: {
+    id: number;
+    name: string;
+  };
   secondaryBodyPartIds?: number[];
   createdAt: string;
   updatedAt: string;
@@ -22,14 +25,14 @@ const deleteTrainingItemMutation = (url: string, { arg }: { arg: { id: number } 
 
 type CreateTrainingItemInput = {
   name: string;
-  bodyPart: keyof typeof BODY_PARTS;
+  bodyPartMasterId: number;
   secondaryBodyPartIds?: number[];
 };
 
 type UpdateTrainingItemInput = {
   id: number;
   name: string;
-  bodyPart: keyof typeof BODY_PARTS;
+  bodyPartMasterId: number;
   secondaryBodyPartIds?: number[];
 };
 
@@ -62,7 +65,7 @@ export const useTrainingItems = () => {
       const optimisticItem: TrainingItem = {
         id: optimisticId,
         name: input.name,
-        bodyPart: input.bodyPart,
+        bodyPartMasterId: input.bodyPartMasterId,
         secondaryBodyPartIds: input.secondaryBodyPartIds ?? [],
         createdAt: now,
         updatedAt: now,
