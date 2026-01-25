@@ -7,6 +7,7 @@ export type TrainingItem = {
   id: number;
   name: string;
   bodyPart: keyof typeof BODY_PARTS;
+  secondaryBodyPartIds?: number[];
   createdAt: string;
   updatedAt: string;
 };
@@ -22,12 +23,14 @@ const deleteTrainingItemMutation = (url: string, { arg }: { arg: { id: number } 
 type CreateTrainingItemInput = {
   name: string;
   bodyPart: keyof typeof BODY_PARTS;
+  secondaryBodyPartIds?: number[];
 };
 
 type UpdateTrainingItemInput = {
   id: number;
   name: string;
   bodyPart: keyof typeof BODY_PARTS;
+  secondaryBodyPartIds?: number[];
 };
 
 type MutateTrainingItems = () => Promise<TrainingItem[] | undefined>;
@@ -60,6 +63,7 @@ export const useTrainingItems = () => {
         id: optimisticId,
         name: input.name,
         bodyPart: input.bodyPart,
+        secondaryBodyPartIds: input.secondaryBodyPartIds ?? [],
         createdAt: now,
         updatedAt: now,
       };

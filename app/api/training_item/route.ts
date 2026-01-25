@@ -5,9 +5,23 @@ export async function GET() {
   try {
     const trainingItems = await prisma.trainingItem.findMany({
       orderBy: { createdAt: "desc" },
+      include: {
+        trainingItemBodyParts: {
+          select: {
+            bodyPartId: true,
+          },
+        },
+      },
     });
 
-    return new Response(JSON.stringify(trainingItems), {
+    // secondaryBodyPartIdsを含む形式に変換
+    const formattedItems = trainingItems.map((item) => ({
+      ...item,
+      secondaryBodyPartIds: item.trainingItemBodyParts.map((bp) => bp.bodyPartId),
+      trainingItemBodyParts: undefined,
+    }));
+
+    return new Response(JSON.stringify(formattedItems), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
@@ -42,10 +56,31 @@ export async function POST(request: Request) {
       data: {
         name: parsedBody.data.name,
         bodyPart: parsedBody.data.bodyPart,
+        trainingItemBodyParts: parsedBody.data.secondaryBodyPartIds
+          ? {
+              create: parsedBody.data.secondaryBodyPartIds.map((bodyPartId) => ({
+                bodyPartId,
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        trainingItemBodyParts: {
+          select: {
+            bodyPartId: true,
+          },
+        },
       },
     });
 
-    return new Response(JSON.stringify(trainingItem), {
+    // secondaryBodyPartIdsを含む形式に変換
+    const formattedItem = {
+      ...trainingItem,
+      secondaryBodyPartIds: trainingItem.trainingItemBodyParts.map((bp) => bp.bodyPartId),
+      trainingItemBodyParts: undefined,
+    };
+
+    return new Response(JSON.stringify(formattedItem), {
       status: 201,
       headers: { "Content-Type": "application/json" },
     });
@@ -101,10 +136,34 @@ export async function PUT(request: Request) {
       data: {
         name: parsedBody.data.name,
         bodyPart: parsedBody.data.bodyPart,
+        trainingItemBodyParts: {
+          // 既存のsecondaryBodyPartsを削除
+          deleteMany: {},
+          // 新しいsecondaryBodyPartsを作成
+          create: parsedBody.data.secondaryBodyPartIds
+            ? parsedBody.data.secondaryBodyPartIds.map((bodyPartId) => ({
+                bodyPartId,
+              }))
+            : [],
+        },
+      },
+      include: {
+        trainingItemBodyParts: {
+          select: {
+            bodyPartId: true,
+          },
+        },
       },
     });
 
-    return new Response(JSON.stringify(updatedItem), {
+    // secondaryBodyPartIdsを含む形式に変換
+    const formattedItem = {
+      ...updatedItem,
+      secondaryBodyPartIds: updatedItem.trainingItemBodyParts.map((bp) => bp.bodyPartId),
+      trainingItemBodyParts: undefined,
+    };
+
+    return new Response(JSON.stringify(formattedItem), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

@@ -12,25 +12,30 @@ import {
   Label,
   Legend,
   Select,
+  Checkbox,
 } from "@headlessui/react";
 import { BODY_PARTS } from "../schema/schema";
 import { BODY_PART_LABELS } from "../../constants/bodyParts";
+import { useBodyParts } from "../../hooks/useBodyParts";
 
 type TrainingItem = {
   id: number;
   name: string;
   bodyPart: keyof typeof BODY_PARTS;
+  secondaryBodyPartIds?: number[];
 };
 
 type CreateInput = {
   name: string;
   bodyPart: keyof typeof BODY_PARTS;
+  secondaryBodyPartIds?: number[];
 };
 
 type UpdateInput = {
   id: number;
   name: string;
   bodyPart: keyof typeof BODY_PARTS;
+  secondaryBodyPartIds?: number[];
 };
 
 type Props = {
@@ -43,8 +48,10 @@ type Props = {
 export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit }: Props) {
   const [name, setName] = useState("");
   const [bodyPart, setBodyPart] = useState<keyof typeof BODY_PARTS>("ARM");
+  const [secondaryBodyPartIds, setSecondaryBodyPartIds] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { bodyParts, loading: bodyPartsLoading } = useBodyParts();
 
   const isEditMode = !!editItem;
 
@@ -53,9 +60,11 @@ export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit 
     if (editItem) {
       setName(editItem.name);
       setBodyPart(editItem.bodyPart);
+      setSecondaryBodyPartIds(editItem.secondaryBodyPartIds ?? []);
     } else {
       setName("");
       setBodyPart("ARM");
+      setSecondaryBodyPartIds([]);
     }
     setError(null);
   }, [editItem, isOpen]);
@@ -66,13 +75,16 @@ export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit 
     setIsSubmitting(true);
 
     try {
-      const input = isEditMode ? { id: editItem.id, name, bodyPart } : { name, bodyPart };
+      const input = isEditMode
+        ? { id: editItem.id, name, bodyPart, secondaryBodyPartIds }
+        : { name, bodyPart, secondaryBodyPartIds };
 
       await onSubmit(input);
 
       // 成功したらフォームをリセットしてモーダルを閉じる
       setName("");
       setBodyPart("ARM");
+      setSecondaryBodyPartIds([]);
       onClose();
     } catch (err) {
       setError(
@@ -81,6 +93,12 @@ export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit 
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSecondaryBodyPartToggle = (bodyPartId: number) => {
+    setSecondaryBodyPartIds((prev) =>
+      prev.includes(bodyPartId) ? prev.filter((id) => id !== bodyPartId) : [...prev, bodyPartId],
+    );
   };
 
   return (
@@ -132,6 +150,49 @@ export default function TrainingItemModal({ isOpen, onClose, editItem, onSubmit 
                     </option>
                   ))}
                 </Select>
+              </Field>
+
+              <Field>
+                <Label className="block text-sm font-medium text-gray-700 mb-2">
+                  サブ部位（複数選択可）
+                </Label>
+                {bodyPartsLoading ? (
+                  <div className="text-sm text-gray-500">読み込み中...</div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3">
+                    {bodyParts.length === 0 ? (
+                      <div className="text-sm text-gray-500">
+                        サブ部位データがありません
+                      </div>
+                    ) : (
+                      bodyParts.map((bp) => (
+                        <div key={bp.id} className="flex items-center">
+                          <Checkbox
+                            checked={secondaryBodyPartIds.includes(bp.id)}
+                            onChange={() => handleSecondaryBodyPartToggle(bp.id)}
+                            className="group mr-2 size-4 rounded border border-gray-300 bg-white data-checked:bg-blue-600 data-checked:border-blue-600"
+                          >
+                            <svg
+                              className="stroke-white opacity-0 group-data-checked:opacity-100"
+                              viewBox="0 0 14 14"
+                              fill="none"
+                            >
+                              <path
+                                d="M3 8L6 11L11 3.5"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </Checkbox>
+                          <Label className="text-sm text-gray-700 cursor-pointer">
+                            {bp.name}
+                          </Label>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </Field>
             </Fieldset>
 

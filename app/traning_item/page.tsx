@@ -16,6 +16,7 @@ import {
 } from "@mui/icons-material";
 import { BODY_PARTS } from "../schema/schema";
 import { useTrainingItems, type TrainingItem } from "../../hooks/useTrainingItems";
+import { useBodyParts } from "../../hooks/useBodyParts";
 import CreateButton from "./CreateButton";
 import TrainingItemModal from "./TrainingItemModal";
 import DeleteConfirmModal from "./DeleteConfirmModal";
@@ -53,11 +54,17 @@ const tabs = [
 
 export default function TrainingItemPage() {
   const { items, loading, error, createItem, updateItem, deleteItem } = useTrainingItems();
+  const { bodyParts } = useBodyParts();
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<TrainingItem | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<TrainingItem | null>(null);
+
+  const getBodyPartName = (bodyPartId: number): string => {
+    const bodyPart = bodyParts.find((bp) => bp.id === bodyPartId);
+    return bodyPart?.name ?? "不明";
+  };
 
   const filterByBodyPart = (bodyPart: string): TrainingItem[] => {
     if (bodyPart === "ALL") {
@@ -175,6 +182,20 @@ export default function TrainingItemPage() {
                                       {bodyPartLabels[item.bodyPart]}
                                     </span>
                                   </div>
+                                  {item.secondaryBodyPartIds &&
+                                    item.secondaryBodyPartIds.length > 0 && (
+                                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                        <span className="text-xs text-slate-600">サブ部位:</span>
+                                        {item.secondaryBodyPartIds.map((bodyPartId) => (
+                                          <span
+                                            key={bodyPartId}
+                                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200"
+                                          >
+                                            {getBodyPartName(bodyPartId)}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
                                   <div className="flex items-center gap-4 text-xs text-slate-500">
                                     <span className="flex items-center gap-1">
                                       <LabelOutlinedIcon sx={{ fontSize: 16 }} />

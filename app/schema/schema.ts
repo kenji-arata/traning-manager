@@ -27,6 +27,7 @@ export const TrainingItemSchema = z.object({
     BODY_PARTS.BACK,
     BODY_PARTS.ABS,
   ]),
+  bodyPartMasterId: z.number().optional(),
   secondaryBodyPartIds: z.array(z.number()).optional(),
 });
 
