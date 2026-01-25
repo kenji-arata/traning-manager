@@ -9,7 +9,12 @@ export const BODY_PARTS = {
   ABS: "ABS",
 } as const;
 
-export type BodyPart = (typeof BODY_PARTS)[keyof typeof BODY_PARTS];
+export const BodyPartSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+});
+
+export type BodyPartType = z.infer<typeof BodyPartSchema>;
 
 export const TrainingItemSchema = z.object({
   id: z.number().optional(),
@@ -22,6 +27,7 @@ export const TrainingItemSchema = z.object({
     BODY_PARTS.BACK,
     BODY_PARTS.ABS,
   ]),
+  secondaryBodyPartIds: z.array(z.number()).optional(),
 });
 
 export type TrainingItemInput = z.infer<typeof TrainingItemSchema>;
