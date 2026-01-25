@@ -20,7 +20,7 @@ import {
 import { useTrainingItems } from "../../../hooks/useTrainingItems";
 import { useTrainingRecords } from "../../../hooks/useTrainingRecords";
 import { useTrainingTemplates } from "../../../hooks/useTrainingTemplates";
-import { BODY_PART_LABELS, BODY_PART_ORDER } from "../../../constants/bodyParts";
+import { useBodyParts } from "../../../hooks/useBodyParts";
 
 type LocalRecord = {
   id: string;
@@ -50,6 +50,7 @@ export default function TrainingRecordPage() {
     deleteRecord,
   } = useTrainingRecords(date);
   const { templates, loading: templatesLoading } = useTrainingTemplates();
+  const { bodyParts } = useBodyParts();
 
   const [localRecords, setLocalRecords] = useState<LocalRecord[]>([]);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
@@ -131,7 +132,15 @@ export default function TrainingRecordPage() {
     {} as Record<string, typeof availableItems>,
   );
 
-  const sortedBodyParts = BODY_PART_ORDER.filter((bodyPart) => availableItemsByBodyPart[bodyPart]);
+  const bodyPartOrder = bodyParts.map((bodyPart) => bodyPart.name);
+  const sortedBodyParts = Object.keys(availableItemsByBodyPart).sort((a, b) => {
+    const aIndex = bodyPartOrder.indexOf(a);
+    const bIndex = bodyPartOrder.indexOf(b);
+    if (aIndex === -1 && bIndex === -1) return a.localeCompare(b, "ja");
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  });
 
   const toggleExpand = (trainingItemId: number) => {
     setExpandedItems((prev) => {
@@ -571,7 +580,7 @@ export default function TrainingRecordPage() {
                 {sortedBodyParts.map((bodyPart) => {
                   const items = availableItemsByBodyPart[bodyPart];
                   const isExpanded = expandedBodyParts.has(bodyPart);
-                  const label = BODY_PART_LABELS[bodyPart as keyof typeof BODY_PART_LABELS];
+                  const label = bodyPart;
                   return (
                     <div
                       key={bodyPart}

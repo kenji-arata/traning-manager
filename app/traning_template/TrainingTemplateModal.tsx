@@ -26,7 +26,7 @@ import {
   Check as CheckIcon,
 } from "@mui/icons-material";
 import { useTrainingItems } from "../../hooks/useTrainingItems";
-import { BODY_PART_LABELS, BODY_PART_ORDER } from "../../constants/bodyParts";
+import { useBodyParts } from "../../hooks/useBodyParts";
 
 type TrainingRecordTemplateInput = {
   trainingItemId: number;
@@ -58,6 +58,7 @@ type Props = {
 
 export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, onSubmit }: Props) {
   const { items: trainingItems } = useTrainingItems();
+  const { bodyParts } = useBodyParts();
   const [name, setName] = useState("");
   const [recordTemplates, setRecordTemplates] = useState<TrainingRecordTemplateInput[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,17 +69,16 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
   const isEditMode = !!editTemplate;
 
   const sortedTrainingItems = useMemo(() => {
+    const bodyPartOrder = bodyParts.map((bodyPart) => bodyPart.name);
     return [...trainingItems].sort((a, b) => {
-      const aBodyPart = a.bodyPartMaster?.name as keyof typeof BODY_PART_LABELS | undefined;
-      const bBodyPart = b.bodyPartMaster?.name as keyof typeof BODY_PART_LABELS | undefined;
-      const aOrder = aBodyPart ? BODY_PART_ORDER.indexOf(aBodyPart) : -1;
-      const bOrder = bBodyPart ? BODY_PART_ORDER.indexOf(bBodyPart) : -1;
-      if (aOrder !== bOrder) {
-        return aOrder - bOrder;
-      }
+      const aBodyPart = a.bodyPartMaster?.name;
+      const bBodyPart = b.bodyPartMaster?.name;
+      const aOrder = aBodyPart ? bodyPartOrder.indexOf(aBodyPart) : -1;
+      const bOrder = bBodyPart ? bodyPartOrder.indexOf(bBodyPart) : -1;
+      if (aOrder !== bOrder) return aOrder === -1 ? 1 : bOrder === -1 ? -1 : aOrder - bOrder;
       return a.name.localeCompare(b.name, "ja");
     });
-  }, [trainingItems]);
+  }, [trainingItems, bodyParts]);
 
   useEffect(() => {
     if (editTemplate) {
@@ -247,12 +247,7 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
                                       </span>
                                     </div>
                                     <span className="text-xs text-gray-500">
-                                      {item.bodyPartMaster?.name
-                                        ? BODY_PART_LABELS[
-                                            item.bodyPartMaster
-                                              .name as keyof typeof BODY_PART_LABELS
-                                          ]
-                                        : ""}
+                                      {item.bodyPartMaster?.name ?? ""}
                                     </span>
                                   </div>
                                   <CheckIcon

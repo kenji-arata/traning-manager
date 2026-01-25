@@ -1,14 +1,5 @@
 import { z } from "zod";
 
-export const BODY_PARTS = {
-  ARM: "ARM",
-  SHOULDER: "SHOULDER",
-  CHEST: "CHEST",
-  LEG: "LEG",
-  BACK: "BACK",
-  ABS: "ABS",
-} as const;
-
 export const BodyPartSchema = z.object({
   id: z.number(),
   name: z.string(),
