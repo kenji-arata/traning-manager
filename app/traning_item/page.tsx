@@ -5,11 +5,6 @@ import { Tab, TabGroup, TabList, TabPanel, TabPanels } from "@headlessui/react";
 import {
   GridView as GridViewIcon,
   FitnessCenter as FitnessCenterIcon,
-  SelfImprovement as SelfImprovementIcon,
-  FavoriteBorder as FavoriteBorderIcon,
-  DirectionsRun as DirectionsRunIcon,
-  Accessibility as AccessibilityIcon,
-  Whatshot as WhatshotIcon,
   LabelOutlined as LabelOutlinedIcon,
   AccessTime as AccessTimeIcon,
   Delete as DeleteIcon,
