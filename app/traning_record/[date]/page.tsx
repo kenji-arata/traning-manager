@@ -45,6 +45,8 @@ export default function TrainingRecordPage() {
     records: savedRecords,
     loading: recordsLoading,
     replaceRecords,
+    createRecords,
+    deleteRecord,
   } = useTrainingRecords(date);
   const { templates, loading: templatesLoading } = useTrainingTemplates();
 
@@ -52,6 +54,7 @@ export default function TrainingRecordPage() {
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [expandedBodyParts, setExpandedBodyParts] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [savingItemIds, setSavingItemIds] = useState<Set<number>>(new Set());
   const [formError, setFormError] = useState<string | null>(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
@@ -177,7 +180,22 @@ export default function TrainingRecordPage() {
     setLocalRecords((prev) => [...prev, newRecord]);
   };
 
-  const handleDeleteRecord = (id: string) => {
+  const handleDeleteRecord = async (id: string) => {
+    // 保存済みレコード（saved- で始まるID）の場合はAPIを呼び出して削除
+    if (id.startsWith("saved-")) {
+      const recordId = parseInt(id.replace("saved-", ""), 10);
+      if (!isNaN(recordId)) {
+        try {
+          await deleteRecord(recordId);
+          // API削除が成功したら、ローカルステートからも削除
+          setLocalRecords((prev) => prev.filter((record) => record.id !== id));
+        } catch (e) {
+          setFormError(e instanceof Error ? e.message : "削除に失敗しました");
+        }
+        return;
+      }
+    }
+    // 未保存のレコード（temp- や template- で始まるID）の場合はローカルステートから削除のみ
     setLocalRecords((prev) => prev.filter((record) => record.id !== id));
   };
 
@@ -220,13 +238,43 @@ export default function TrainingRecordPage() {
     }
   }, [localRecords, replaceRecords, date]);
 
-  useEffect(() => {
-    if (!hasUnsavedChanges || isSubmitting) return undefined;
-    const timeoutId = setTimeout(() => {
-      handleSaveAll();
-    }, 10000);
-    return () => clearTimeout(timeoutId);
-  }, [localRecords, hasUnsavedChanges, isSubmitting, handleSaveAll]);
+  const handleSaveItem = useCallback(
+    async (trainingItemId: number) => {
+      setSavingItemIds((prev) => new Set(prev).add(trainingItemId));
+      setFormError(null);
+      try {
+        const itemRecords = localRecords
+          .filter(
+            (record) =>
+              record.trainingItemId === trainingItemId &&
+              record.weight !== null &&
+              record.repetitions !== null &&
+              record.repetitions > 0,
+          )
+          .map((record) => ({
+            trainingItemId: record.trainingItemId,
+            weight: record.weight!,
+            repetitions: record.repetitions!,
+          }));
+
+        if (itemRecords.length === 0) {
+          setFormError("保存するデータがありません");
+          return;
+        }
+
+        await createRecords(date, itemRecords);
+      } catch (e) {
+        setFormError(e instanceof Error ? e.message : "保存に失敗しました");
+      } finally {
+        setSavingItemIds((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(trainingItemId);
+          return newSet;
+        });
+      }
+    },
+    [localRecords, createRecords, date],
+  );
 
   const handleApplyTemplate = (templateId: number) => {
     const template = templates.find((t) => t.id === templateId);
@@ -330,17 +378,22 @@ export default function TrainingRecordPage() {
               </div>
               {groupedRecords.map((group, index) => {
                 const isExpanded = expandedItems.has(group.trainingItemId);
+                const isSaving = savingItemIds.has(group.trainingItemId);
+                const hasValidRecords = group.records.some(
+                  (record) =>
+                    record.weight !== null && record.repetitions !== null && record.repetitions > 0,
+                );
                 return (
                   <div
                     key={group.trainingItemId}
                     className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <button
-                      onClick={() => toggleExpand(group.trainingItemId)}
-                      className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
+                    <div className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <button
+                        onClick={() => toggleExpand(group.trainingItemId)}
+                        className="flex items-center gap-3 flex-1"
+                      >
                         <FitnessCenterIcon sx={{ fontSize: 24 }} className="text-blue-600" />
                         <div className="text-left">
                           <h3 className="text-lg font-semibold text-slate-900">
@@ -348,16 +401,33 @@ export default function TrainingRecordPage() {
                           </h3>
                           <p className="text-sm text-slate-600">{group.records.length}セット</p>
                         </div>
+                      </button>
+                      <div className="flex items-center gap-2">
+                        {hasValidRecords && (
+                          <button
+                            onClick={() => handleSaveItem(group.trainingItemId)}
+                            disabled={isSaving}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <SaveIcon sx={{ fontSize: 16 }} />
+                            <span>{isSaving ? "保存中..." : "保存"}</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => toggleExpand(group.trainingItemId)}
+                          className="text-slate-400 hover:text-slate-600 transition-colors p-1"
+                          aria-label="展開/折りたたみ"
+                        >
+                          <ExpandMoreIcon
+                            sx={{
+                              fontSize: 28,
+                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                              transition: "transform 0.2s",
+                            }}
+                          />
+                        </button>
                       </div>
-                      <ExpandMoreIcon
-                        sx={{
-                          fontSize: 28,
-                          transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform 0.2s",
-                        }}
-                        className="text-slate-400"
-                      />
-                    </button>
+                    </div>
                     {isExpanded && (
                       <div className="px-5 pb-4 border-t border-slate-200">
                         <div className="mt-4 space-y-2">

@@ -27,6 +27,12 @@ type QueryParams = {
   trainingItemId?: number;
 };
 
+type TrainingRecordInput = {
+  trainingItemId: number;
+  weight: number;
+  repetitions: number;
+};
+
 const buildPath = ({ startDate, endDate, trainingItemId }: QueryParams) => {
   const params = new URLSearchParams();
   if (startDate) params.append("start_date", startDate);
@@ -34,6 +40,35 @@ const buildPath = ({ startDate, endDate, trainingItemId }: QueryParams) => {
   if (trainingItemId) params.append("training_item_id", trainingItemId.toString());
   const queryString = params.toString();
   return `/api/traning_record${queryString ? `?${queryString}` : ""}`;
+};
+
+const isTrainingRecordKey = (key: unknown): key is string =>
+  typeof key === "string" && key.startsWith("/api/traning_record");
+
+const buildOptimisticRecords = (
+  date: string,
+  records: TrainingRecordInput[],
+  now: string,
+  current: TrainingRecord[] | undefined,
+): TrainingRecord[] => {
+  const existing = current ?? [];
+  const trainingItemMap = new Map(
+    existing.map((record) => [record.trainingItemId, record.trainingItem]),
+  );
+  return records.map((record, index) => ({
+    id: (Date.now() + index) * -1,
+    date,
+    trainingItemId: record.trainingItemId,
+    weight: record.weight,
+    repetitions: record.repetitions,
+    createdAt: now,
+    updatedAt: now,
+    trainingItem: trainingItemMap.get(record.trainingItemId) ?? {
+      id: record.trainingItemId,
+      name: "",
+      bodyPart: "",
+    },
+  }));
 };
 
 export const useTrainingRecords = (initialDate?: string) => {
@@ -60,42 +95,74 @@ export const useTrainingRecords = (initialDate?: string) => {
   /**
    * トレーニング記録を一括更新（洗い替え）
    */
-  const replaceRecords = async (
-    date: string,
-    records: Array<{ trainingItemId: number; weight: number; repetitions: number }>,
-  ): Promise<void> => {
+  const replaceRecords = async (date: string, records: TrainingRecordInput[]): Promise<void> => {
     const targetKey = buildPath({ startDate: date, endDate: date });
     const now = new Date().toISOString();
     try {
       await globalMutate(
         targetKey,
-        (current: TrainingRecord[] | undefined) => {
-          const existing = current ?? [];
-          const trainingItemMap = new Map(
-            existing.map((record) => [record.trainingItemId, record.trainingItem]),
-          );
-          return records.map((record, index) => ({
-            id: (Date.now() + index) * -1,
-            date,
-            trainingItemId: record.trainingItemId,
-            weight: record.weight,
-            repetitions: record.repetitions,
-            createdAt: now,
-            updatedAt: now,
-            trainingItem: trainingItemMap.get(record.trainingItemId) ?? {
-              id: record.trainingItemId,
-              name: "",
-              bodyPart: "",
-            },
-          }));
-        },
+        (current: TrainingRecord[] | undefined) =>
+          buildOptimisticRecords(date, records, now, current),
         false,
       );
       await ApiClient.patch("/api/traning_record", { date, records });
-      await globalMutate(targetKey);
+      await globalMutate((key) => isTrainingRecordKey(key) && key !== targetKey);
     } catch (e) {
-      await globalMutate(targetKey);
+      await globalMutate(isTrainingRecordKey);
       throw new Error(e instanceof Error ? e.message : "保存に失敗しました");
+    }
+  };
+
+  /**
+   * PATCHエンドポイントを使って実績を作成（一括置換）
+   */
+  const createRecords = async (
+    date: string,
+    records: TrainingRecordInput[],
+  ): Promise<TrainingRecord[]> => {
+    const targetKey = buildPath({ startDate: date, endDate: date });
+    const now = new Date().toISOString();
+    try {
+      await globalMutate(
+        targetKey,
+        (current: TrainingRecord[] | undefined) =>
+          buildOptimisticRecords(date, records, now, current),
+        false,
+      );
+      const result = await ApiClient.patch<TrainingRecord[]>("/api/traning_record", {
+        date,
+        records,
+      });
+      await globalMutate(targetKey, result, false);
+      await globalMutate((key) => isTrainingRecordKey(key) && key !== targetKey);
+      return result;
+    } catch (e) {
+      await globalMutate(isTrainingRecordKey);
+      throw new Error(e instanceof Error ? e.message : "実績の作成に失敗しました");
+    }
+  };
+
+  /**
+   * DELETEエンドポイントを使って実績を削除
+   */
+  const deleteRecord = async (id: number): Promise<void> => {
+    try {
+      // 楽観的更新：全てのキャッシュから該当レコードを削除
+      await globalMutate(
+        isTrainingRecordKey,
+        (current: TrainingRecord[] | undefined) => {
+          if (!current) return current;
+          return current.filter((record) => record.id !== id);
+        },
+        false,
+      );
+      await ApiClient.delete(`/api/traning_record?id=${id}`);
+      // 全てのキャッシュを再検証（削除されたレコードがどのクエリに含まれていたか不明なため）
+      await globalMutate(isTrainingRecordKey);
+    } catch (e) {
+      // エラー時は全てのキャッシュを再検証してロールバック
+      await globalMutate(isTrainingRecordKey);
+      throw new Error(e instanceof Error ? e.message : "実績の削除に失敗しました");
     }
   };
 
@@ -105,5 +172,7 @@ export const useTrainingRecords = (initialDate?: string) => {
     error: error instanceof Error ? error.message : error ? String(error) : null,
     fetchRecords,
     replaceRecords,
+    createRecords,
+    deleteRecord,
   };
 };
