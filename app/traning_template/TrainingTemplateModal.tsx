@@ -69,8 +69,10 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
 
   const sortedTrainingItems = useMemo(() => {
     return [...trainingItems].sort((a, b) => {
-      const aOrder = BODY_PART_ORDER.indexOf(a.bodyPart);
-      const bOrder = BODY_PART_ORDER.indexOf(b.bodyPart);
+      const aBodyPart = a.bodyPartMaster?.name as keyof typeof BODY_PART_LABELS | undefined;
+      const bBodyPart = b.bodyPartMaster?.name as keyof typeof BODY_PART_LABELS | undefined;
+      const aOrder = aBodyPart ? BODY_PART_ORDER.indexOf(aBodyPart) : -1;
+      const bOrder = bBodyPart ? BODY_PART_ORDER.indexOf(bBodyPart) : -1;
       if (aOrder !== bOrder) {
         return aOrder - bOrder;
       }
@@ -245,7 +247,12 @@ export default function TrainingTemplateModal({ isOpen, onClose, editTemplate, o
                                       </span>
                                     </div>
                                     <span className="text-xs text-gray-500">
-                                      {BODY_PART_LABELS[item.bodyPart]}
+                                      {item.bodyPartMaster?.name
+                                        ? BODY_PART_LABELS[
+                                            item.bodyPartMaster
+                                              .name as keyof typeof BODY_PART_LABELS
+                                          ]
+                                        : ""}
                                     </span>
                                   </div>
                                   <CheckIcon

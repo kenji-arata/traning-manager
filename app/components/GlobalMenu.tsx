@@ -51,7 +51,7 @@ export const GlobalMenu = () => {
           ? "4px 0 24px rgba(102, 126, 234, 0.3)"
           : "2px 0 12px rgba(102, 126, 234, 0.2)",
         transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        zIndex: 1200,
+        zIndex: 40,
         display: "flex",
         flexDirection: "column",
       }}
