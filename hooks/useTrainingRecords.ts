@@ -114,31 +114,55 @@ export const useTrainingRecords = (initialDate?: string) => {
   };
 
   /**
-   * PATCHエンドポイントを使って実績を作成（一括置換）
+   * 特定種目のレコードのみを更新（他種目に影響を与えない）
    */
-  const createRecords = async (
+  const updateItemRecords = async (
     date: string,
+    trainingItemId: number,
     records: TrainingRecordInput[],
-  ): Promise<TrainingRecord[]> => {
+  ): Promise<void> => {
     const targetKey = buildPath({ startDate: date, endDate: date });
-    const now = new Date().toISOString();
     try {
+      // 楽観的更新：該当種目のレコードを新しいものに置き換え
       await globalMutate(
         targetKey,
-        (current: TrainingRecord[] | undefined) =>
-          buildOptimisticRecords(date, records, now, current),
+        (current: TrainingRecord[] | undefined) => {
+          if (!current) return current;
+          // 該当種目以外のレコードを保持
+          const otherRecords = current.filter((r) => r.trainingItemId !== trainingItemId);
+          // 新しいレコードを追加
+          const now = new Date().toISOString();
+          const newRecords = buildOptimisticRecords(date, records, now, current);
+          return [...otherRecords, ...newRecords];
+        },
         false,
       );
-      const result = await ApiClient.patch<TrainingRecord[]>("/api/traning_record", {
-        date,
-        records,
-      });
-      await globalMutate(targetKey, result, false);
+
+      // 該当種目の既存レコードを削除
+      const existingRecords = await ApiClient.get<TrainingRecord[]>(targetKey);
+      const recordsToDelete = existingRecords.filter((r) => r.trainingItemId === trainingItemId);
+      await Promise.all(
+        recordsToDelete.map((r) => ApiClient.delete(`/api/traning_record?id=${r.id}`)),
+      );
+
+      // 新しいレコードを作成
+      await Promise.all(
+        records.map((record) =>
+          ApiClient.post<TrainingRecord>("/api/traning_record", {
+            date: new Date(date),
+            trainingItemId: record.trainingItemId,
+            weight: record.weight,
+            repetitions: record.repetitions,
+          }),
+        ),
+      );
+
+      // キャッシュを更新
+      await globalMutate(targetKey);
       await globalMutate((key) => isTrainingRecordKey(key) && key !== targetKey);
-      return result;
     } catch (e) {
       await globalMutate(isTrainingRecordKey);
-      throw new Error(e instanceof Error ? e.message : "実績の作成に失敗しました");
+      throw new Error(e instanceof Error ? e.message : "実績の更新に失敗しました");
     }
   };
 
@@ -172,7 +196,7 @@ export const useTrainingRecords = (initialDate?: string) => {
     error: error instanceof Error ? error.message : error ? String(error) : null,
     fetchRecords,
     replaceRecords,
-    createRecords,
+    updateItemRecords,
     deleteRecord,
   };
 };

@@ -15,6 +15,7 @@ import {
   CheckCircle as CheckCircleIcon,
   ListAlt as ListAltIcon,
   Refresh as RefreshIcon,
+  RotateLeft as RotateLeftIcon,
 } from "@mui/icons-material";
 import { useTrainingItems } from "../../../hooks/useTrainingItems";
 import { useTrainingRecords } from "../../../hooks/useTrainingRecords";
@@ -45,7 +46,7 @@ export default function TrainingRecordPage() {
     records: savedRecords,
     loading: recordsLoading,
     replaceRecords,
-    createRecords,
+    updateItemRecords,
     deleteRecord,
   } = useTrainingRecords(date);
   const { templates, loading: templatesLoading } = useTrainingTemplates();
@@ -171,11 +172,14 @@ export default function TrainingRecordPage() {
   };
 
   const handleAddRecord = (trainingItemId: number) => {
+    // 同じtrainingItemIdの最後のレコードから重量を取得
+    const lastRecord = localRecords.filter((r) => r.trainingItemId === trainingItemId).slice(-1)[0];
+
     const newRecord: LocalRecord = {
       id: `temp-${Date.now()}-${Math.random()}`,
       trainingItemId,
-      weight: null,
-      repetitions: null,
+      weight: lastRecord?.weight ?? null,
+      repetitions: 0,
     };
     setLocalRecords((prev) => [...prev, newRecord]);
   };
@@ -221,10 +225,7 @@ export default function TrainingRecordPage() {
     setFormError(null);
     try {
       const recordsToSave = localRecords
-        .filter(
-          (record) =>
-            record.weight !== null && record.repetitions !== null && record.repetitions > 0,
-        )
+        .filter((record) => record.weight !== null && record.repetitions !== null)
         .map((record) => ({
           trainingItemId: record.trainingItemId,
           weight: record.weight!,
@@ -248,8 +249,7 @@ export default function TrainingRecordPage() {
             (record) =>
               record.trainingItemId === trainingItemId &&
               record.weight !== null &&
-              record.repetitions !== null &&
-              record.repetitions > 0,
+              record.repetitions !== null,
           )
           .map((record) => ({
             trainingItemId: record.trainingItemId,
@@ -262,7 +262,8 @@ export default function TrainingRecordPage() {
           return;
         }
 
-        await createRecords(date, itemRecords);
+        // 種目ごとの更新（他種目に影響を与えない）
+        await updateItemRecords(date, trainingItemId, itemRecords);
       } catch (e) {
         setFormError(e instanceof Error ? e.message : "保存に失敗しました");
       } finally {
@@ -273,7 +274,7 @@ export default function TrainingRecordPage() {
         });
       }
     },
-    [localRecords, createRecords, date],
+    [localRecords, updateItemRecords, date],
   );
 
   const handleApplyTemplate = (templateId: number) => {
@@ -282,8 +283,8 @@ export default function TrainingRecordPage() {
     const newRecords: LocalRecord[] = template.trainingRecordTemplates.map((rt, index) => ({
       id: `template-${Date.now()}-${index}`,
       trainingItemId: rt.trainingItemId,
-      weight: rt.weight ?? null,
-      repetitions: rt.repetitions ?? null,
+      weight: rt.weight ?? 0,
+      repetitions: rt.repetitions ?? 0,
     }));
     setLocalRecords(newRecords);
     setShowTemplateSelector(false);
@@ -380,9 +381,51 @@ export default function TrainingRecordPage() {
                 const isExpanded = expandedItems.has(group.trainingItemId);
                 const isSaving = savingItemIds.has(group.trainingItemId);
                 const hasValidRecords = group.records.some(
-                  (record) =>
-                    record.weight !== null && record.repetitions !== null && record.repetitions > 0,
+                  (record) => record.weight !== null && record.repetitions !== null,
                 );
+
+                // 回数が0のセットがあるかチェック
+                const hasZeroRepRecords = group.records.some((record) => record.repetitions === 0);
+                const zeroRepCount = group.records.filter(
+                  (record) => record.repetitions === 0,
+                ).length;
+
+                // 種目ごとの差分チェック
+                const itemHasUnsavedChanges = (() => {
+                  const itemLocalRecords = localRecords.filter(
+                    (r) => r.trainingItemId === group.trainingItemId,
+                  );
+                  const itemSavedRecords = savedRecords.filter(
+                    (r) => r.trainingItemId === group.trainingItemId,
+                  );
+
+                  if (itemLocalRecords.length !== itemSavedRecords.length) return true;
+
+                  const sortedLocal = [...itemLocalRecords].sort((a, b) => {
+                    const aWeight = a.weight ?? -1;
+                    const bWeight = b.weight ?? -1;
+                    if (aWeight !== bWeight) return aWeight - bWeight;
+                    const aReps = a.repetitions ?? -1;
+                    const bReps = b.repetitions ?? -1;
+                    return aReps - bReps;
+                  });
+
+                  const sortedSaved = [...itemSavedRecords].sort((a, b) => {
+                    if (a.weight !== b.weight) return a.weight - b.weight;
+                    return a.repetitions - b.repetitions;
+                  });
+
+                  for (let i = 0; i < sortedLocal.length; i++) {
+                    if (
+                      sortedLocal[i].weight !== sortedSaved[i].weight ||
+                      sortedLocal[i].repetitions !== sortedSaved[i].repetitions
+                    ) {
+                      return true;
+                    }
+                  }
+                  return false;
+                })();
+
                 return (
                   <div
                     key={group.trainingItemId}
@@ -396,14 +439,24 @@ export default function TrainingRecordPage() {
                       >
                         <FitnessCenterIcon sx={{ fontSize: 24 }} className="text-blue-600" />
                         <div className="text-left">
-                          <h3 className="text-lg font-semibold text-slate-900">
-                            {group.trainingItemName}
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-slate-900">
+                              {group.trainingItemName}
+                            </h3>
+                            {hasZeroRepRecords && (
+                              <span
+                                className="flex items-center justify-center w-6 h-6 bg-orange-100 rounded-full"
+                                title={`0回のセット: ${zeroRepCount}件`}
+                              >
+                                <RotateLeftIcon sx={{ fontSize: 16 }} className="text-orange-700" />
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-slate-600">{group.records.length}セット</p>
                         </div>
                       </button>
                       <div className="flex items-center gap-2">
-                        {hasValidRecords && (
+                        {hasValidRecords && itemHasUnsavedChanges && (
                           <button
                             onClick={() => handleSaveItem(group.trainingItemId)}
                             disabled={isSaving}
