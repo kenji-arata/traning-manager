@@ -38,6 +38,7 @@ import { useTrainingItems } from "../../../hooks/useTrainingItems";
 import { useTrainingRecords } from "../../../hooks/useTrainingRecords";
 import { useTrainingTemplates } from "../../../hooks/useTrainingTemplates";
 import { useBodyParts } from "../../../hooks/useBodyParts";
+import TrainingTimer from "./TrainingTimer";
 
 type LocalRecord = {
   id: string;
@@ -77,6 +78,7 @@ export default function TrainingRecordPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [itemOrder, setItemOrder] = useState<number[]>([]);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -326,14 +328,12 @@ export default function TrainingRecordPage() {
             weight: record.weight!,
             repetitions: record.repetitions!,
           }));
-
         if (itemRecords.length === 0) {
           setFormError("保存するデータがありません");
           return;
         }
-
-        // 種目ごとの更新（他種目に影響を与えない）
         await updateItemRecords(date, trainingItemId, itemRecords);
+        setIsTimerRunning(true);
       } catch (e) {
         setFormError(e instanceof Error ? e.message : "保存に失敗しました");
       } finally {
@@ -411,6 +411,12 @@ export default function TrainingRecordPage() {
           </div>
         )}
 
+        <TrainingTimer
+          isRunning={isTimerRunning}
+          onStart={() => setIsTimerRunning(true)}
+          onStop={() => setIsTimerRunning(false)}
+          onReset={() => setIsTimerRunning(false)}
+        />
         <div className="space-y-4">
           {groupedRecords.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-slate-200">
