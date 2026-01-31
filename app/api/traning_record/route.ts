@@ -40,7 +40,7 @@ export async function GET(request: Request) {
       include: {
         trainingItem: true,
       },
-      orderBy: { date: "desc" },
+      orderBy: { id: "asc" },
     });
 
     return new Response(JSON.stringify(trainingRecords), {
@@ -327,6 +327,7 @@ export async function PATCH(request: Request) {
         include: {
           trainingItem: true,
         },
+        orderBy: { id: "asc" },
       });
       return recordsWithItems;
     });
