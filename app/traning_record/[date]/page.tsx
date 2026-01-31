@@ -16,7 +16,24 @@ import {
   ListAlt as ListAltIcon,
   Refresh as RefreshIcon,
   RotateLeft as RotateLeftIcon,
+  DragIndicator as DragIndicatorIcon,
 } from "@mui/icons-material";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useTrainingItems } from "../../../hooks/useTrainingItems";
 import { useTrainingRecords } from "../../../hooks/useTrainingRecords";
 import { useTrainingTemplates } from "../../../hooks/useTrainingTemplates";
@@ -59,6 +76,16 @@ export default function TrainingRecordPage() {
   const [savingItemIds, setSavingItemIds] = useState<Set<number>>(new Set());
   const [formError, setFormError] = useState<string | null>(null);
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [itemOrder, setItemOrder] = useState<number[]>([]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor),
+  );
 
   useEffect(() => {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -104,7 +131,7 @@ export default function TrainingRecordPage() {
     return false;
   })();
 
-  const groupedRecords: GroupedRecords[] = trainingItems
+  const groupedRecordsUnsorted: GroupedRecords[] = trainingItems
     .map((item) => {
       const itemRecords = localRecords.filter((record) => record.trainingItemId === item.id);
       return {
@@ -115,6 +142,30 @@ export default function TrainingRecordPage() {
       };
     })
     .filter((group) => group.records.length > 0);
+
+  // itemOrderに基づいて並び替え
+  const groupedRecords: GroupedRecords[] = [...groupedRecordsUnsorted].sort((a, b) => {
+    const aIndex = itemOrder.indexOf(a.trainingItemId);
+    const bIndex = itemOrder.indexOf(b.trainingItemId);
+    // itemOrderにない場合は末尾に
+    if (aIndex === -1 && bIndex === -1) return 0;
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  });
+
+  // itemOrderの初期化・更新（新しい種目が追加された場合に対応）
+  const currentItemIds = groupedRecordsUnsorted.map((g) => g.trainingItemId);
+  const currentItemIdsKey = currentItemIds.join(",");
+  useEffect(() => {
+    setItemOrder((prev) => {
+      // 既存の順序を保持しつつ、新しいアイテムを末尾に追加
+      const existingOrder = prev.filter((id) => currentItemIds.includes(id));
+      const newItems = currentItemIds.filter((id) => !prev.includes(id));
+      return [...existingOrder, ...newItems];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentItemIdsKey]);
 
   const availableItems = trainingItems.filter(
     (item) => !localRecords.some((record) => record.trainingItemId === item.id),
@@ -217,6 +268,15 @@ export default function TrainingRecordPage() {
     setLocalRecords((prev) =>
       prev.map((record) => (record.id === id ? { ...record, weight, repetitions } : record)),
     );
+  };
+
+  const handleReorderItems = (activeId: number, overId: number) => {
+    setItemOrder((prev) => {
+      const oldIndex = prev.indexOf(activeId);
+      const newIndex = prev.indexOf(overId);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
   };
 
   const handleResetChanges = useCallback(() => {
@@ -387,131 +447,37 @@ export default function TrainingRecordPage() {
                   </div>
                 )}
               </div>
-              {groupedRecords.map((group, index) => {
-                const isExpanded = expandedItems.has(group.trainingItemId);
-                const isSaving = savingItemIds.has(group.trainingItemId);
-                const hasValidRecords = group.records.some(
-                  (record) => record.weight !== null && record.repetitions !== null,
-                );
-
-                // 回数が0のセットがあるかチェック
-                const hasZeroRepRecords = group.records.some((record) => record.repetitions === 0);
-                const zeroRepCount = group.records.filter(
-                  (record) => record.repetitions === 0,
-                ).length;
-
-                // 種目ごとの差分チェック
-                const itemHasUnsavedChanges = (() => {
-                  const itemLocalRecords = localRecords.filter(
-                    (r) => r.trainingItemId === group.trainingItemId,
-                  );
-                  const itemSavedRecords = savedRecords.filter(
-                    (r) => r.trainingItemId === group.trainingItemId,
-                  );
-
-                  if (itemLocalRecords.length !== itemSavedRecords.length) return true;
-
-                  const sortedLocal = [...itemLocalRecords].sort((a, b) => {
-                    const aWeight = a.weight ?? -1;
-                    const bWeight = b.weight ?? -1;
-                    if (aWeight !== bWeight) return aWeight - bWeight;
-                    const aReps = a.repetitions ?? -1;
-                    const bReps = b.repetitions ?? -1;
-                    return aReps - bReps;
-                  });
-
-                  const sortedSaved = [...itemSavedRecords].sort((a, b) => {
-                    if (a.weight !== b.weight) return a.weight - b.weight;
-                    return a.repetitions - b.repetitions;
-                  });
-
-                  for (let i = 0; i < sortedLocal.length; i++) {
-                    if (
-                      sortedLocal[i].weight !== sortedSaved[i].weight ||
-                      sortedLocal[i].repetitions !== sortedSaved[i].repetitions
-                    ) {
-                      return true;
-                    }
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event: DragEndEvent) => {
+                  const { active, over } = event;
+                  if (over && active.id !== over.id) {
+                    handleReorderItems(active.id as number, over.id as number);
                   }
-                  return false;
-                })();
-
-                return (
-                  <div
-                    key={group.trainingItemId}
-                    className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <div className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                      <button
-                        onClick={() => toggleExpand(group.trainingItemId)}
-                        className="flex items-center gap-3 flex-1"
-                      >
-                        <FitnessCenterIcon sx={{ fontSize: 24 }} className="text-blue-600" />
-                        <div className="text-left">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-900">
-                              {group.trainingItemName}
-                            </h3>
-                            {hasZeroRepRecords && (
-                              <span
-                                className="flex items-center justify-center w-6 h-6 bg-orange-100 rounded-full"
-                                title={`0回のセット: ${zeroRepCount}件`}
-                              >
-                                <RotateLeftIcon sx={{ fontSize: 16 }} className="text-orange-700" />
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-slate-600">{group.records.length}セット</p>
-                        </div>
-                      </button>
-                      <div className="flex items-center gap-2">
-                        {hasValidRecords && itemHasUnsavedChanges && (
-                          <button
-                            onClick={() => handleSaveItem(group.trainingItemId)}
-                            disabled={isSaving}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <SaveIcon sx={{ fontSize: 16 }} />
-                            <span>{isSaving ? "保存中..." : "保存"}</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => toggleExpand(group.trainingItemId)}
-                          className="text-slate-400 hover:text-slate-600 transition-colors p-1"
-                          aria-label="展開/折りたたみ"
-                        >
-                          <ExpandMoreIcon
-                            sx={{
-                              fontSize: 28,
-                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                              transition: "transform 0.2s",
-                            }}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                    {isExpanded && (
-                      <div className="px-5 pb-4 border-t border-slate-200">
-                        <div className="mt-4 space-y-2">
-                          {group.records.map((record, recordIndex) => (
-                            <RecordItem
-                              key={record.id}
-                              record={record}
-                              recordIndex={recordIndex}
-                              onUpdate={handleUpdateRecord}
-                              onDelete={handleDeleteRecord}
-                              onAddRecord={handleAddRecord}
-                              trainingItemId={group.trainingItemId}
-                              isLastRecord={recordIndex === group.records.length - 1}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                }}
+              >
+                <SortableContext
+                  items={groupedRecords.map((g) => g.trainingItemId)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {groupedRecords.map((group) => (
+                    <SortableTrainingItemCard
+                      key={group.trainingItemId}
+                      group={group}
+                      isExpanded={expandedItems.has(group.trainingItemId)}
+                      isSaving={savingItemIds.has(group.trainingItemId)}
+                      localRecords={localRecords}
+                      savedRecords={savedRecords}
+                      onToggleExpand={toggleExpand}
+                      onSaveItem={handleSaveItem}
+                      onUpdateRecord={handleUpdateRecord}
+                      onDeleteRecord={handleDeleteRecord}
+                      onAddRecord={handleAddRecord}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </>
           )}
         </div>
@@ -626,6 +592,165 @@ export default function TrainingRecordPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+type SortableTrainingItemCardProps = {
+  group: GroupedRecords;
+  isExpanded: boolean;
+  isSaving: boolean;
+  localRecords: LocalRecord[];
+  savedRecords: { id: number; trainingItemId: number; weight: number; repetitions: number }[];
+  onToggleExpand: (trainingItemId: number) => void;
+  onSaveItem: (trainingItemId: number) => void;
+  onUpdateRecord: (id: string, weight: number | null, repetitions: number | null) => void;
+  onDeleteRecord: (id: string) => void;
+  onAddRecord: (trainingItemId: number) => void;
+};
+
+function SortableTrainingItemCard({
+  group,
+  isExpanded,
+  isSaving,
+  localRecords,
+  savedRecords,
+  onToggleExpand,
+  onSaveItem,
+  onUpdateRecord,
+  onDeleteRecord,
+  onAddRecord,
+}: SortableTrainingItemCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: group.trainingItemId,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : "auto",
+  };
+
+  const hasValidRecords = group.records.some(
+    (record) => record.weight !== null && record.repetitions !== null,
+  );
+
+  const hasZeroRepRecords = group.records.some((record) => record.repetitions === 0);
+  const zeroRepCount = group.records.filter((record) => record.repetitions === 0).length;
+
+  const itemHasUnsavedChanges = (() => {
+    const itemLocalRecords = localRecords.filter((r) => r.trainingItemId === group.trainingItemId);
+    const itemSavedRecords = savedRecords.filter((r) => r.trainingItemId === group.trainingItemId);
+
+    if (itemLocalRecords.length !== itemSavedRecords.length) return true;
+
+    const sortedLocal = [...itemLocalRecords].sort((a, b) => {
+      const aWeight = a.weight ?? -1;
+      const bWeight = b.weight ?? -1;
+      if (aWeight !== bWeight) return aWeight - bWeight;
+      const aReps = a.repetitions ?? -1;
+      const bReps = b.repetitions ?? -1;
+      return aReps - bReps;
+    });
+
+    const sortedSaved = [...itemSavedRecords].sort((a, b) => {
+      if (a.weight !== b.weight) return a.weight - b.weight;
+      return a.repetitions - b.repetitions;
+    });
+
+    for (let i = 0; i < sortedLocal.length; i++) {
+      if (
+        sortedLocal[i].weight !== sortedSaved[i].weight ||
+        sortedLocal[i].repetitions !== sortedSaved[i].repetitions
+      ) {
+        return true;
+      }
+    }
+    return false;
+  })();
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+    >
+      <div className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+        <div className="flex items-center gap-3 flex-1">
+          <button
+            {...listeners}
+            className="p-1 text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing touch-none"
+            aria-label="ドラッグして並び替え"
+          >
+            <DragIndicatorIcon sx={{ fontSize: 20 }} />
+          </button>
+          <button
+            onClick={() => onToggleExpand(group.trainingItemId)}
+            className="flex items-center gap-3 flex-1"
+          >
+            <FitnessCenterIcon sx={{ fontSize: 24 }} className="text-blue-600" />
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-slate-900">{group.trainingItemName}</h3>
+                {hasZeroRepRecords && (
+                  <span
+                    className="flex items-center justify-center w-6 h-6 bg-orange-100 rounded-full"
+                    title={`0回のセット: ${zeroRepCount}件`}
+                  >
+                    <RotateLeftIcon sx={{ fontSize: 16 }} className="text-orange-700" />
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-slate-600">{group.records.length}セット</p>
+            </div>
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasValidRecords && itemHasUnsavedChanges && (
+            <button
+              onClick={() => onSaveItem(group.trainingItemId)}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+            >
+              <SaveIcon sx={{ fontSize: 16 }} />
+              <span>{isSaving ? "保存中..." : "保存"}</span>
+            </button>
+          )}
+          <button
+            onClick={() => onToggleExpand(group.trainingItemId)}
+            className="text-slate-400 hover:text-slate-600 transition-colors p-1"
+            aria-label="展開/折りたたみ"
+          >
+            <ExpandMoreIcon
+              sx={{
+                fontSize: 28,
+                transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                transition: "transform 0.2s",
+              }}
+            />
+          </button>
+        </div>
+      </div>
+      {isExpanded && (
+        <div className="px-5 pb-4 border-t border-slate-200">
+          <div className="mt-4 space-y-2">
+            {group.records.map((record, recordIndex) => (
+              <RecordItem
+                key={record.id}
+                record={record}
+                recordIndex={recordIndex}
+                onUpdate={onUpdateRecord}
+                onDelete={onDeleteRecord}
+                onAddRecord={onAddRecord}
+                trainingItemId={group.trainingItemId}
+                isLastRecord={recordIndex === group.records.length - 1}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
