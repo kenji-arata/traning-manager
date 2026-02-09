@@ -43,6 +43,21 @@ export const AppShell = ({ children }: Props) => {
             <MenuIcon />
           </IconButton>
         </div>
+        {isMenuOpen && (
+          <div
+            onClick={() => setIsMenuOpen(false)}
+            style={{
+              position: "fixed",
+              top: MENU_DIMENSIONS.header,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.5)",
+              zIndex: 30,
+              transition: "opacity 0.3s ease",
+            }}
+          />
+        )}
         <GlobalMenu mode="mobile" isOpen={isMenuOpen} onToggle={toggleMenu} />
         <div style={{ paddingTop: MENU_DIMENSIONS.header }}>{children}</div>
       </>

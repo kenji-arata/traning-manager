@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Input } from "@headlessui/react";
 import {
@@ -54,6 +54,11 @@ type GroupedRecords = {
   records: LocalRecord[];
 };
 
+type PreviousSession = {
+  date: string;
+  records: { weight: number; repetitions: number }[];
+};
+
 export default function TrainingRecordPage() {
   const params = useParams();
   const router = useRouter();
@@ -69,6 +74,31 @@ export default function TrainingRecordPage() {
   } = useTrainingRecords(date);
   const { templates, loading: templatesLoading } = useTrainingTemplates();
   const { bodyParts } = useBodyParts();
+
+  const oneMonthAgo = useMemo(() => {
+    const d = new Date(date);
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().split("T")[0];
+  }, [date]);
+  const { records: recentRecords } = useTrainingRecords(oneMonthAgo, date);
+
+  const previousSessionMap = useMemo(() => {
+    const map = new Map<number, PreviousSession>();
+    for (const r of recentRecords) {
+      const recordDate = r.date.substring(0, 10);
+      if (recordDate === date) continue;
+      const existing = map.get(r.trainingItemId);
+      if (!existing || recordDate > existing.date) {
+        map.set(r.trainingItemId, {
+          date: recordDate,
+          records: [{ weight: r.weight, repetitions: r.repetitions }],
+        });
+      } else if (recordDate === existing.date) {
+        existing.records.push({ weight: r.weight, repetitions: r.repetitions });
+      }
+    }
+    return map;
+  }, [recentRecords, date]);
 
   const [localRecords, setLocalRecords] = useState<LocalRecord[]>([]);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
@@ -475,6 +505,7 @@ export default function TrainingRecordPage() {
                       isSaving={savingItemIds.has(group.trainingItemId)}
                       localRecords={localRecords}
                       savedRecords={savedRecords}
+                      previousSession={previousSessionMap.get(group.trainingItemId)}
                       onToggleExpand={toggleExpand}
                       onSaveItem={handleSaveItem}
                       onUpdateRecord={handleUpdateRecord}
@@ -608,6 +639,7 @@ type SortableTrainingItemCardProps = {
   isSaving: boolean;
   localRecords: LocalRecord[];
   savedRecords: { id: number; trainingItemId: number; weight: number; repetitions: number }[];
+  previousSession?: PreviousSession;
   onToggleExpand: (trainingItemId: number) => void;
   onSaveItem: (trainingItemId: number) => void;
   onUpdateRecord: (id: string, weight: number | null, repetitions: number | null) => void;
@@ -621,6 +653,7 @@ function SortableTrainingItemCard({
   isSaving,
   localRecords,
   savedRecords,
+  previousSession,
   onToggleExpand,
   onSaveItem,
   onUpdateRecord,
@@ -741,6 +774,25 @@ function SortableTrainingItemCard({
       </div>
       {isExpanded && (
         <div className="px-5 pb-4 border-t border-slate-200">
+          {previousSession && (
+            <div className="mt-3 mb-2 p-3 bg-blue-50/70 rounded-lg border border-blue-100">
+              <p className="text-xs font-medium text-blue-700 mb-1.5">
+                前回の記録 (
+                {new Date(previousSession.date).toLocaleDateString("ja-JP", {
+                  month: "short",
+                  day: "numeric",
+                })}
+                )
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {previousSession.records.map((r, i) => (
+                  <span key={i} className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded">
+                    {r.weight}kg × {r.repetitions}rep
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mt-4 space-y-2">
             {group.records.map((record, recordIndex) => (
               <RecordItem
