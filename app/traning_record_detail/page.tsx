@@ -136,19 +136,23 @@ export default function TrainingRecordDetailPage() {
                       {/* 種目ごとの行 */}
                       <div className="divide-y divide-slate-100">
                         {itemList.map(({ itemId, name, sets }) => (
-                          <div key={itemId} className="flex items-center gap-3 px-4 py-2 flex-wrap">
-                            <span className="text-xs font-medium text-slate-700 w-28 shrink-0 truncate">
-                              {name}
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {sets.map((set) => (
-                                <span
-                                  key={set.id}
-                                  className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 whitespace-nowrap"
-                                >
-                                  {set.weight}kg×{set.repetitions}
-                                </span>
-                              ))}
+                          <div key={itemId} className="flex items-center gap-3 px-4 py-2">
+                            <div className="w-28 shrink-0 overflow-x-auto">
+                              <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
+                                {name}
+                              </span>
+                            </div>
+                            <div className="flex-1 overflow-x-auto">
+                              <div className="flex gap-1.5">
+                                {sets.map((set) => (
+                                  <span
+                                    key={set.id}
+                                    className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 whitespace-nowrap"
+                                  >
+                                    {set.weight}kg×{set.repetitions}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         ))}
