@@ -2,10 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useTrainingRecords } from "../../hooks/useTrainingRecords";
-import { useTrainingItems } from "../../hooks/useTrainingItems";
-import { useBodyParts } from "../../hooks/useBodyParts";
-import { buildMaxWeightsByItem } from "../../utils/trainingRecordStats";
-
 const formatLocalDate = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -24,15 +20,19 @@ export default function TrainingRecordDetailPage() {
   const defaultRange = useMemo(() => getDefaultRange(), []);
   const [startDate, setStartDate] = useState(defaultRange.startDate);
   const [endDate, setEndDate] = useState(defaultRange.endDate);
-  const [isMaxWeightOpen, setIsMaxWeightOpen] = useState(false);
   const [isDailyOpen, setIsDailyOpen] = useState(true);
+  const [selectedTrainingItemId, setSelectedTrainingItemId] = useState<string>("");
   const { records, loading, error } = useTrainingRecords(startDate, endDate);
-  const { items } = useTrainingItems();
-  const { bodyParts } = useBodyParts();
-  const maxWeights = useMemo(
-    () => buildMaxWeightsByItem(records, items, bodyParts),
-    [records, items, bodyParts],
-  );
+
+  const trainingItemOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    records.forEach((record) => {
+      if (record.trainingItemId && record.trainingItem?.name) {
+        map.set(record.trainingItemId, record.trainingItem.name);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [records]);
 
   const dailyRecords = useMemo(() => {
     const byDate = new Map<string, Map<number, typeof records>>();
@@ -68,7 +68,7 @@ export default function TrainingRecordDetailPage() {
             期間を指定してトレーニング実績の詳細を確認します。
           </p>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6 mb-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex flex-col gap-2">
               <label className="text-sm text-slate-600">開始日</label>
@@ -87,6 +87,23 @@ export default function TrainingRecordDetailPage() {
                 onChange={(event) => setEndDate(event.target.value)}
                 className="rounded-lg border border-slate-300 px-3 py-2 text-slate-900"
               />
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col gap-2 w-full sm:w-64">
+              <label className="text-sm text-slate-600">種目で絞り込み</label>
+              <select
+                value={selectedTrainingItemId}
+                onChange={(event) => setSelectedTrainingItemId(event.target.value)}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-slate-900 bg-white"
+              >
+                <option value="">すべての種目</option>
+                {trainingItemOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -116,8 +133,22 @@ export default function TrainingRecordDetailPage() {
               )}
               {!loading && !error && dailyRecords.length > 0 && (
                 <div className="space-y-2">
-                  {dailyRecords.map(({ date, items: itemList, totalSets }) => (
-                    <div key={date} className="rounded-lg border border-slate-200 overflow-hidden">
+                  {dailyRecords.map(({ date, items: itemList, totalSets }) => {
+                    const filteredItems =
+                      selectedTrainingItemId === ""
+                        ? itemList
+                        : itemList.filter(
+                            (item) => String(item.itemId) === selectedTrainingItemId,
+                          );
+                    if (filteredItems.length === 0) {
+                      return null;
+                    }
+                    const filteredTotalSets = filteredItems.reduce(
+                      (sum, item) => sum + item.sets.length,
+                      0,
+                    );
+                    return (
+                      <div key={date} className="rounded-lg border border-slate-200 overflow-hidden">
                       {/* 日付ヘッダー */}
                       <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 border-b border-slate-200">
                         <span className="text-sm font-semibold text-slate-800">
@@ -130,12 +161,12 @@ export default function TrainingRecordDetailPage() {
                           ）
                         </span>
                         <span className="text-xs text-slate-400">
-                          {itemList.length}種目 · {totalSets}セット
+                          {filteredItems.length}種目 · {filteredTotalSets}セット
                         </span>
                       </div>
                       {/* 種目ごとの行 */}
                       <div className="divide-y divide-slate-100">
-                        {itemList.map(({ itemId, name, sets }) => (
+                        {filteredItems.map(({ itemId, name, sets }) => (
                           <div key={itemId} className="flex items-center gap-3 px-4 py-2">
                             <div className="w-28 shrink-0 overflow-x-auto">
                               <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
@@ -158,71 +189,8 @@ export default function TrainingRecordDetailPage() {
                         ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 shadow-lg">
-          <button
-            type="button"
-            onClick={() => setIsMaxWeightOpen((prev) => !prev)}
-            className="w-full flex items-center justify-between px-6 py-4 text-left"
-          >
-            <span className="text-slate-900 font-semibold">種目別 最大重量</span>
-            <svg
-              className={`w-5 h-5 text-slate-500 transition-transform duration-200 ${isMaxWeightOpen ? "rotate-180" : ""}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {isMaxWeightOpen && (
-            <div className="px-6 pb-6">
-              {loading && <div className="text-slate-600">読み込み中...</div>}
-              {error && <div className="text-red-600">{error}</div>}
-              {!loading && !error && maxWeights.length === 0 && (
-                <div className="text-slate-600">指定期間の実績がありません。</div>
-              )}
-              {!loading && !error && maxWeights.length > 0 && (
-                <div className="space-y-3">
-                  {maxWeights.map((item) => (
-                    <div
-                      key={item.trainingItemId}
-                      className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3"
-                    >
-                      <div>
-                        <div className="text-slate-800 font-medium">
-                          {item.name || "名称未設定"}
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {item.mainBodyPartName ? (
-                            <span className="rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white">
-                              {item.mainBodyPartName}
-                            </span>
-                          ) : (
-                            <span className="rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-500">
-                              部位未設定
-                            </span>
-                          )}
-                          {item.secondaryBodyPartNames.map((name) => (
-                            <span
-                              key={`${item.trainingItemId}-${name}`}
-                              className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700"
-                            >
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="text-slate-900 font-semibold">{item.maxWeight} kg</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
